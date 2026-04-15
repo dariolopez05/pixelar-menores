@@ -15,15 +15,34 @@ La comunicación entre servicios es **completamente asíncrona** mediante Kafka.
 
 | Componente | Tecnología |
 |---|---|
-| Mensajería | Apache Kafka + Zookeeper |
+| Mensajería | Apache Kafka (KRaft, sin Zookeeper) |
 | Contenedores | Docker + Docker Compose |
 | API | FastAPI (Python) |
-| Face Detection | OpenCV / YOLO / Dlib |
-| Age Detection | PyTorch / TensorFlow (ResNet o similar) |
+| Face Detection | OpenCV Haar Cascades |
+| Age Detection | DeepFace |
 | Pixelation | OpenCV |
-| Almacenamiento objetos | MinIO (S3-compatible) |
-| Base de datos | SQL (PostgreSQL o MySQL) |
+| Almacenamiento objetos | MinIO |
+| Base de datos | PostgreSQL |
 | Dataset | https://www.kaggle.com/datasets/frabbisw/facial-age |
+
+---
+
+## Contenedores (12 en total)
+
+| Contenedor | Rol |
+|---|---|
+| `kafka` | Broker Kafka en modo KRaft (sin Zookeeper) |
+| `postgres` | Base de datos PostgreSQL |
+| `minio` | Almacenamiento de objetos (S3-compatible) |
+| `api-gateway` | Punto de entrada HTTP (FastAPI) |
+| `orchestrator-1` | Gestiona entrada del pipeline |
+| `orchestrator-2` | Gestiona post-detección de caras |
+| `orchestrator-3` | Gestiona post-detección de edad |
+| `orchestrator-4` | Cierra el pipeline |
+| `face-detection` | Detecta todas las caras de una imagen |
+| `age-detection` | Estima la edad de cada cara |
+| `pixelation` | Pixela las caras de menores |
+| `storage-service` | Genera URL final y cierra la solicitud |
 
 ---
 
@@ -32,48 +51,66 @@ La comunicación entre servicios es **completamente asíncrona** mediante Kafka.
 ### 1. API Gateway
 - **Rol:** Punto de entrada HTTP para el cliente
 - **Produce:** `images.raw`
-- **Consume:** consulta BD y MinIO para devolver resultado
+- **Consume:** consulta BD para devolver resultado
 - **Tecnología:** FastAPI
 - **Endpoints:**
-  - `POST /images` — recibe imagen, publica en `images.raw`, devuelve GUID
-  - `GET /images/{guid}` — consulta estado y devuelve imagen procesada o 404
+  - `POST /images` — recibe imagen, la sube a MinIO como `raw-images/{guid}.{ext}`, inserta en `Solicitud`, publica en `images.raw`, devuelve GUID
+  - `GET /images/{guid}` — consulta estado y métricas, o 404 si no existe
+  - `GET /health` — health check
+- **Nota:** crea los buckets `raw-images` y `processed-images` en MinIO al arrancar si no existen
 
-### 2. Orquestador
-- **Rol:** Coordinador del workflow. No procesa imágenes, solo gestiona estado y decide el siguiente paso
-- **Consume:** todos los eventos `evt.*` y `images.raw`
-- **Produce:** todos los comandos `cmd.*`
-- **Responsabilidades:**
-  - Guardar estado de cada solicitud en BD
-  - Decidir el siguiente servicio según el estado actual
-  - Gestionar errores, reintentos y rutas alternativas
-  - Marcar solicitudes como COMPLETED
+### 2. Orquestadores (x4)
+
+#### Orquestador 1
+- **Escucha:** `images.raw`
+- **Hace:** actualiza `Solicitud` (Estado → `FACE_DETECTION`, `Inicio_Deteccion_Caras`)
+- **Publica:** `cmd.face_detection`
+
+#### Orquestador 2
+- **Escucha:** `evt.face_detection.completed`
+- **Hace:** actualiza `Solicitud` (`Fin_Deteccion_Caras`, `Num_Imagenes_Total`), inserta filas en `Imagenes`
+- **Publica:** `cmd.age_detection` (si hay caras) o `cmd.storage` (si no hay caras)
+
+#### Orquestador 3
+- **Escucha:** `evt.age_detection.completed`
+- **Hace:** actualiza `Solicitud` (`Inicio_Edad`, `Fin_Edad`, Estado)
+- **Publica:** `cmd.pixelation` (si hay menores) o `cmd.storage` (si no hay menores)
+
+#### Orquestador 4
+- **Escucha:** `evt.pixelation.completed` y `evt.storage.completed`
+- **Hace (pixelation):** actualiza `Solicitud` (`Inicio_Pixelado`, `Fin_Pixelado`, `Num_Imagenes_Pixeladas`) → publica `cmd.storage`
+- **Hace (storage):** marca `Solicitud` como `COMPLETED` con `Fin_Solicitud` y timestamps de almacenamiento
 
 ### 3. Face Detection Service
+- **1 solo contenedor**
 - **Consume:** `cmd.face_detection`
 - **Produce:** `evt.face_detection.completed`
-- **Función:** Detectar rostros y generar bounding boxes
-- **Tecnología:** OpenCV, YOLO o Dlib
+- **Función:** detecta todas las caras de la imagen y devuelve sus bounding boxes `[{num_cara, x, y, w, h}]`
+- **Tecnología:** OpenCV Haar Cascades (`haarcascade_frontalface_default.xml`)
 
 ### 4. Age Detection Service
+- **1 solo contenedor**
 - **Consume:** `cmd.age_detection`
 - **Produce:** `evt.age_detection.completed`
-- **Función:** Estimar edad de cada rostro y clasificar como `<18` o `>=18`
-- **Tecnología:** PyTorch / TensorFlow (ResNet o similar)
+- **Función:** estima la edad de cada cara y clasifica como `es_menor` si `edad < 18`
+- **Tecnología:** DeepFace (`actions=['age']`, `enforce_detection=False`)
 
 ### 5. Pixelation Service
 - **Consume:** `cmd.pixelation`
 - **Produce:** `evt.pixelation.completed`
-- **Función:** Pixelar las regiones de bounding box de rostros menores
-- **Tecnología:** OpenCV
+- **Función:** pixela las regiones de los menores (bloque 20px), guarda en `processed-images/{guid}.{ext}`
+- **Tecnología:** OpenCV (resize down + resize up con `INTER_NEAREST`)
 
-### 6. Storage / Result Service
+### 6. Storage Service
 - **Consume:** `cmd.storage`
 - **Produce:** `evt.storage.completed`
-- **Función:** Guardar imagen final en MinIO, actualizar BD con URL y timestamps
+- **Función:** genera URL presignada de MinIO (1h), actualiza `Solicitud.Id_Fichero`, publica evento de cierre
 
 ### 7. MinIO
-- Almacenamiento de objetos compatible con AWS S3
-- Contiene imágenes originales y procesadas
+- Almacenamiento de objetos
+- Bucket `raw-images` — imágenes originales: clave `{guid}.{ext}`
+- Bucket `processed-images` — imágenes pixeladas: clave `{guid}.{ext}` (mismo nombre, distinto bucket)
+- El GUID es el identificador único del objeto en ambos buckets
 
 ---
 
@@ -81,144 +118,53 @@ La comunicación entre servicios es **completamente asíncrona** mediante Kafka.
 
 | Topic | Productor | Consumidor |
 |---|---|---|
-| `images.raw` | API Gateway | Orquestador |
-| `cmd.face_detection` | Orquestador | Face Detection Service |
-| `evt.face_detection.completed` | Face Detection Service | Orquestador |
-| `cmd.age_detection` | Orquestador | Age Detection Service |
-| `evt.age_detection.completed` | Age Detection Service | Orquestador |
-| `cmd.pixelation` | Orquestador | Pixelation Service |
-| `evt.pixelation.completed` | Pixelation Service | Orquestador |
-| `cmd.storage` | Orquestador | Storage Service |
-| `evt.storage.completed` | Storage Service | Orquestador |
+| `images.raw` | API Gateway | Orquestador 1 |
+| `cmd.face_detection` | Orquestador 1 | Face Detection |
+| `evt.face_detection.completed` | Face Detection | Orquestador 2 |
+| `cmd.age_detection` | Orquestador 2 | Age Detection |
+| `evt.age_detection.completed` | Age Detection | Orquestador 3 |
+| `cmd.pixelation` | Orquestador 3 | Pixelation |
+| `evt.pixelation.completed` | Pixelation | Orquestador 4 |
+| `cmd.storage` | Orquestador 3 / Orquestador 4 | Storage Service |
+| `evt.storage.completed` | Storage Service | Orquestador 4 |
+| `dead.letter.queue` | Cualquier servicio en error | — |
+
+> Los topics se crean automáticamente (`KAFKA_AUTO_CREATE_TOPICS_ENABLE: true`). No hay contenedor `kafka-init`.
 
 ---
 
 ## Flujo conceptual
 
 ```
-1.  Cliente       → POST /images           → API Gateway
-2.  API Gateway   → publica                → images.raw
-3.  Orquestador   → consume images.raw     → guarda estado inicial en BD
-                  → publica               → cmd.face_detection
-4.  Face Det.     → consume cmd.face_detection
-                  → publica               → evt.face_detection.completed (con bounding boxes)
-5.  Orquestador   → actualiza estado BD
-                  → publica               → cmd.age_detection
-6.  Age Det.      → consume cmd.age_detection
-                  → publica               → evt.age_detection.completed (con edades estimadas)
-7.  Orquestador   → ¿hay menores?
-      ├─ Sí       → publica               → cmd.pixelation
-      └─ No       → publica               → cmd.storage
-8.  Pixelation    → consume cmd.pixelation
-                  → publica               → evt.pixelation.completed (imagen modificada)
-9.  Orquestador   → publica               → cmd.storage
-10. Storage       → guarda en MinIO, actualiza BD
-                  → publica               → evt.storage.completed
-11. Orquestador   → marca solicitud como COMPLETED en BD
-12. Cliente       → GET /images/{guid}    → API Gateway devuelve URL de MinIO o 404
-```
-
----
-
-## Contratos de eventos (JSON schemas)
-
-### `images.raw`
-```json
-{
-  "guid": "uuid-string",
-  "timestamp": "ISO8601",
-  "filename": "imagen.jpg",
-  "image_data": "base64-encoded-bytes"
-}
-```
-
-### `cmd.face_detection`
-```json
-{
-  "guid": "uuid-string",
-  "timestamp": "ISO8601",
-  "image_ref": "minio-object-key"
-}
-```
-
-### `evt.face_detection.completed`
-```json
-{
-  "guid": "uuid-string",
-  "timestamp": "ISO8601",
-  "faces": [
-    { "face_id": 0, "bbox": { "x": 10, "y": 20, "w": 50, "h": 60 } }
-  ],
-  "processing_time_ms": 120
-}
-```
-
-### `cmd.age_detection`
-```json
-{
-  "guid": "uuid-string",
-  "timestamp": "ISO8601",
-  "image_ref": "minio-object-key",
-  "faces": [ { "face_id": 0, "bbox": { "x": 10, "y": 20, "w": 50, "h": 60 } } ]
-}
-```
-
-### `evt.age_detection.completed`
-```json
-{
-  "guid": "uuid-string",
-  "timestamp": "ISO8601",
-  "faces": [
-    { "face_id": 0, "bbox": { "x": 10, "y": 20, "w": 50, "h": 60 }, "estimated_age": 15, "is_minor": true }
-  ],
-  "has_minors": true,
-  "processing_time_ms": 340
-}
-```
-
-### `cmd.pixelation`
-```json
-{
-  "guid": "uuid-string",
-  "timestamp": "ISO8601",
-  "image_ref": "minio-object-key",
-  "faces_to_pixelate": [
-    { "face_id": 0, "bbox": { "x": 10, "y": 20, "w": 50, "h": 60 } }
-  ]
-}
-```
-
-### `evt.pixelation.completed`
-```json
-{
-  "guid": "uuid-string",
-  "timestamp": "ISO8601",
-  "image_ref": "minio-object-key-pixelated",
-  "processing_time_ms": 80
-}
-```
-
-### `cmd.storage`
-```json
-{
-  "guid": "uuid-string",
-  "timestamp": "ISO8601",
-  "image_ref": "minio-object-key",
-  "metadata": {
-    "total_faces": 2,
-    "pixelated_faces": 1
-  }
-}
-```
-
-### `evt.storage.completed`
-```json
-{
-  "guid": "uuid-string",
-  "timestamp": "ISO8601",
-  "result_url": "http://minio:9000/bucket/processed/uuid.jpg",
-  "processing_time_ms": 50
-}
+1.  Cliente        → POST /images              → API Gateway
+2.  API Gateway    → sube imagen a MinIO        → raw-images/{guid}.ext
+                   → publica                   → images.raw
+3.  Orquestador 1  → consume images.raw
+                   → actualiza BD              → Estado = FACE_DETECTION
+                   → publica                   → cmd.face_detection
+4.  Face Det.      → descarga raw-images/{guid}.ext
+                   → detecta TODAS las caras
+                   → publica                   → evt.face_detection.completed
+5.  Orquestador 2  → actualiza BD, inserta Imagenes
+                   → publica                   → cmd.age_detection (si hay caras)
+                                               → cmd.storage (si no hay caras)
+6.  Age Det.       → descarga imagen, recorta cada cara
+                   → estima edad con DeepFace
+                   → publica                   → evt.age_detection.completed
+7.  Orquestador 3  → actualiza BD
+      ├─ menores   → publica                   → cmd.pixelation
+      └─ sin men.  → publica                   → cmd.storage
+8.  Pixelation     → descarga raw-images/{guid}.ext
+                   → pixela caras de menores
+                   → sube a processed-images/{guid}.ext
+                   → publica                   → evt.pixelation.completed
+9.  Orquestador 4  → actualiza BD (timestamps pixelado)
+                   → publica                   → cmd.storage
+10. Storage        → genera URL presignada de MinIO
+                   → actualiza Solicitud.Id_Fichero
+                   → publica                   → evt.storage.completed
+11. Orquestador 4  → marca Estado = COMPLETED
+12. Cliente        → GET /images/{guid}        → API Gateway devuelve estado y métricas
 ```
 
 ---
@@ -226,29 +172,29 @@ La comunicación entre servicios es **completamente asíncrona** mediante Kafka.
 ## Esquema de base de datos
 
 ```sql
-CREATE TABLE Solicitud (
-    Id_Solicitud            INT PRIMARY KEY AUTO_INCREMENT,
-    GUID_Solicitud          VARCHAR(255) UNIQUE NOT NULL,
-    Id_Fichero              VARCHAR(255),
-    Inicio_Solicitud        DATETIME,
-    Fin_Solicitud           DATETIME,
-    Inicio_Deteccion_Caras  DATETIME,
-    Fin_Deteccion_Caras     DATETIME,
-    Inicio_Almacenamiento_Solicitud DATETIME,
-    Fin_Almacenamiento_Solicitud    DATETIME,
-    Num_Imagenes_Total      INT DEFAULT 0,
-    Num_Imagenes_Pixeladas  INT DEFAULT 0,
-    Estado                  VARCHAR(50)  -- PENDING, FACE_DETECTION, AGE_DETECTION, PIXELATION, STORAGE, COMPLETED, ERROR
+CREATE TABLE IF NOT EXISTS Solicitud (
+    Id_Solicitud                    SERIAL PRIMARY KEY,
+    GUID_Solicitud                  VARCHAR(255),
+    Id_Fichero                      VARCHAR(255),   -- URL presignada del resultado en MinIO
+    Inicio_Solicitud                TIMESTAMP,
+    Fin_Solicitud                   TIMESTAMP,
+    Inicio_Deteccion_Caras          TIMESTAMP,
+    Fin_Deteccion_Caras             TIMESTAMP,
+    Inicio_Almacenamiento_Solicitud TIMESTAMP,
+    Fin_Almacenamiento_Solicitud    TIMESTAMP,
+    Num_Imagenes_Total              INT,
+    Num_Imagenes_Pixeladas          INT,
+    Estado                          VARCHAR(50),    -- PENDING, FACE_DETECTION, AGE_DETECTION, PIXELATION, STORAGE, COMPLETED, ERROR
+    Inicio_Edad                     TIMESTAMP,
+    Fin_Edad                        TIMESTAMP,
+    Inicio_Pixelado                 TIMESTAMP,
+    Fin_Pixelado                    TIMESTAMP
 );
 
-CREATE TABLE Imagenes (
-    Id_Imagen       INT PRIMARY KEY AUTO_INCREMENT,
-    Id_Solicitud    INT NOT NULL,
-    Inicio_Edad     DATETIME,
-    Fin_edad        DATETIME,
-    Inicio_Pixelado DATETIME,
-    Fin_Pixelado    DATETIME,
-    Estado          VARCHAR(50),
+CREATE TABLE IF NOT EXISTS Imagenes (
+    Id_Imagen    SERIAL PRIMARY KEY,
+    Id_Solicitud INT,
+    Estado       VARCHAR(50),
     FOREIGN KEY (Id_Solicitud) REFERENCES Solicitud(Id_Solicitud)
 );
 ```
@@ -259,45 +205,51 @@ CREATE TABLE Imagenes (
 
 ```
 PENDING → FACE_DETECTION → AGE_DETECTION → PIXELATION → STORAGE → COMPLETED
-                                        ↘ (sin menores)          ↗
-                                          ──────────────────────
-                                                STORAGE
+                                        ↘ (sin menores o sin caras)
+                                              STORAGE → COMPLETED
 ```
 
-En caso de error en cualquier paso: estado `ERROR` con posibilidad de reintento.
-
 ---
 
-## Métricas de rendimiento
-
-Cada servicio debe registrar y loguear:
-- `processing_time_ms` — tiempo de procesamiento del evento
-- Latencia end-to-end (calculada en el orquestador: `Fin_Solicitud - Inicio_Solicitud`)
-- Throughput (opcional): eventos procesados por segundo
-
----
-
-## Gestión de errores
-
-- **Dead-letter queue:** mensajes que fallan N veces se publican en `evt.*.failed`
-- **Reintentos:** el orquestador reenvía el comando hasta 3 veces antes de marcar ERROR
-- **Timeout:** si un servicio no responde en X segundos, el orquestador actúa
-- **Idempotencia:** cada servicio debe ser idempotente (mismo GUID = mismo resultado)
-
----
-
-## Estructura de carpetas esperada
+## Estructura de carpetas
 
 ```
 proyecto_pixelar-menores/
 ├── docker-compose.yml
 ├── CLAUDE.md
-├── README.md
+├── INSTRUCCIONES.md
+├── .env
+├── scripts/
+│   ├── fase1-infra-up.bat
+│   ├── fase2-api-gateway-up.bat
+│   ├── fase3-orchestrator-up.bat
+│   ├── fase4-face-detection-up.bat
+│   ├── fase5-age-detection-up.bat
+│   ├── fase6-pixelation-up.bat
+│   ├── fase7-storage-up.bat
+│   ├── status.bat
+│   ├── logs.bat
+│   ├── down.bat
+│   ├── reset.bat
+│   ├── test-pipeline.bat
+│   └── README.md
 ├── api-gateway/
 │   ├── Dockerfile
 │   ├── main.py
 │   └── requirements.txt
-├── orchestrator/
+├── orchestrator-1/
+│   ├── Dockerfile
+│   ├── main.py
+│   └── requirements.txt
+├── orchestrator-2/
+│   ├── Dockerfile
+│   ├── main.py
+│   └── requirements.txt
+├── orchestrator-3/
+│   ├── Dockerfile
+│   ├── main.py
+│   └── requirements.txt
+├── orchestrator-4/
 │   ├── Dockerfile
 │   ├── main.py
 │   └── requirements.txt
@@ -326,7 +278,17 @@ proyecto_pixelar-menores/
 
 ## Notas de implementación
 
-- Las imágenes **no viajan dentro de los mensajes Kafka** (demasiado grandes). Se guardan en MinIO desde el API Gateway y los eventos transportan solo la referencia (`minio-object-key`).
-- El API Gateway sube la imagen original a MinIO al recibirla, antes de publicar en `images.raw`.
-- Cada servicio Python usa `confluent-kafka` o `kafka-python` como cliente Kafka.
-- El orquestador es el único servicio que escribe en la tabla `Solicitud`. Los demás solo leen sus comandos de Kafka.
+- Las imágenes **no viajan dentro de los mensajes Kafka**. Se guardan en MinIO y los eventos transportan solo la referencia (bucket + clave).
+- El **GUID** es el identificador único de cada solicitud y de su imagen en MinIO. La clave del objeto es `{guid}.{ext}` en ambos buckets.
+- El API Gateway crea los buckets de MinIO al arrancar si no existen (no hay contenedor `minio-init`).
+- Kafka usa modo **KRaft** (sin Zookeeper). Los topics se crean automáticamente.
+- Cada servicio Python usa `kafka-python` como cliente Kafka y `psycopg2-binary` para PostgreSQL.
+- Los orquestadores son los únicos servicios que escriben en la tabla `Solicitud`.
+
+---
+
+## Gestión de errores
+
+- **Dead-letter queue:** mensajes fallidos se publican en `dead.letter.queue`
+- **Idempotencia:** cada servicio es idempotente (mismo GUID = mismo resultado)
+- **Reintentos de conexión:** cada servicio reintenta conectar a Kafka hasta 15 veces con espera de 5s

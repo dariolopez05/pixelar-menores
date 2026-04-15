@@ -1,164 +1,95 @@
+networks:
+  kafka-net:
+    driver: bridge
+  storage-net:
+    driver: bridge
+  db-net:
+    driver: bridge
+
+volumes:
+  kafka-data:
+  postgres-data:
+  minio-data:
+
 services:
 
-  # ─────────────────────────────────────────────
-  # INFRAESTRUCTURA
-  # ─────────────────────────────────────────────
-
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.6.0
-    container_name: zookeeper
-    restart: unless-stopped
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    networks:
-      - internal
-    healthcheck:
-      test: ["CMD", "bash", "-c", "echo ruok | nc localhost 2181"]
-      interval: 10s
-      timeout: 5s
-      retries: 5
-
+  # ── 1. KAFKA ──────────────────────────────────────────────
   kafka:
-    image: confluentinc/cp-kafka:7.6.0
+    image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
     restart: unless-stopped
-    depends_on:
-      zookeeper:
-        condition: service_healthy
     ports:
-      - "9092:9092"       # acceso externo (host)
+      - "9092:9092"
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT_INTERNAL:PLAINTEXT,PLAINTEXT_EXTERNAL:PLAINTEXT
-      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT_INTERNAL://kafka:29092,PLAINTEXT_EXTERNAL://localhost:9092
-      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: "broker,controller"
+      KAFKA_CONTROLLER_QUORUM_VOTERS: "1@kafka:9093"
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,PLAINTEXT_HOST://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_LOG_RETENTION_HOURS: 24
+    volumes:
+      - kafka-data:/var/lib/kafka/data
     networks:
-      - internal
+      - kafka-net
     healthcheck:
-      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:29092"]
+      test: ["CMD", "kafka-broker-api-versions", "--bootstrap-server", "localhost:9092"]
       interval: 15s
       timeout: 10s
       retries: 10
 
-  # Crea los topics necesarios al arrancar
-  kafka-init:
-    image: confluentinc/cp-kafka:7.6.0
-    container_name: kafka-init
-    depends_on:
-      kafka:
-        condition: service_healthy
-    entrypoint: ["/bin/bash", "-c"]
-    command: |
-      "
-      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic images.raw              --partitions 3 --replication-factor 1
-      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic cmd.face_detection      --partitions 3 --replication-factor 1
-      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic evt.face_detection.completed --partitions 3 --replication-factor 1
-      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic cmd.age_detection       --partitions 3 --replication-factor 1
-      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic evt.age_detection.completed  --partitions 3 --replication-factor 1
-      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic cmd.pixelation          --partitions 3 --replication-factor 1
-      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic evt.pixelation.completed     --partitions 3 --replication-factor 1
-      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic cmd.storage             --partitions 3 --replication-factor 1
-      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic evt.storage.completed       --partitions 3 --replication-factor 1
-      kafka-topics --bootstrap-server kafka:29092 --create --if-not-exists --topic evt.dead_letter             --partitions 1 --replication-factor 1
-      echo '>>> Topics creados correctamente'
-      "
-    networks:
-      - internal
-
-  # UI para inspeccionar Kafka (opcional pero muy útil en desarrollo)
-  kafka-ui:
-    image: provectuslabs/kafka-ui:latest
-    container_name: kafka-ui
-    restart: unless-stopped
-    depends_on:
-      kafka:
-        condition: service_healthy
-    ports:
-      - "8080:8080"
-    environment:
-      KAFKA_CLUSTERS_0_NAME: local
-      KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
-    networks:
-      - internal
-
-  # ─────────────────────────────────────────────
-  # BASE DE DATOS
-  # ─────────────────────────────────────────────
-
+  # ── 2. POSTGRESQL ─────────────────────────────────────────
   postgres:
     image: postgres:16-alpine
     container_name: postgres
     restart: unless-stopped
-    environment:
-      POSTGRES_DB: pixelado
-      POSTGRES_USER: pixelado_user
-      POSTGRES_PASSWORD: pixelado_pass
     ports:
       - "5432:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-facedb}
+      POSTGRES_USER: ${POSTGRES_USER:-faceuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-facepass}
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres-data:/var/lib/postgresql/data
       - ./db/init.sql:/docker-entrypoint-initdb.d/init.sql:ro
     networks:
-      - internal
+      - db-net
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U pixelado_user -d pixelado"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-faceuser} -d ${POSTGRES_DB:-facedb}"]
       interval: 10s
       timeout: 5s
       retries: 5
 
-  # ─────────────────────────────────────────────
-  # ALMACENAMIENTO DE OBJETOS
-  # ─────────────────────────────────────────────
-
+  # ── 3. MINIO ──────────────────────────────────────────────
   minio:
     image: minio/minio:latest
     container_name: minio
     restart: unless-stopped
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: minioadmin
-      MINIO_ROOT_PASSWORD: minioadmin123
     ports:
-      - "9000:9000"   # API S3
-      - "9001:9001"   # Consola web
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
     volumes:
-      - minio_data:/data
+      - minio-data:/data
     networks:
-      - internal
+      - storage-net
     healthcheck:
-      test: ["CMD", "mc", "ready", "local"]
-      interval: 15s
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
       timeout: 5s
       retries: 5
 
-  # Crea los buckets necesarios al arrancar
-  minio-init:
-    image: minio/mc:latest
-    container_name: minio-init
-    depends_on:
-      minio:
-        condition: service_healthy
-    entrypoint: ["/bin/sh", "-c"]
-    command: |
-      "
-      mc alias set local http://minio:9000 minioadmin minioadmin123
-      mc mb --ignore-existing local/images-raw
-      mc mb --ignore-existing local/images-processed
-      mc anonymous set download local/images-processed
-      echo '>>> Buckets creados correctamente'
-      "
-    networks:
-      - internal
-
-  # ─────────────────────────────────────────────
-  # MICROSERVICIOS
-  # ─────────────────────────────────────────────
-
+  # ── 4. API GATEWAY ────────────────────────────────────────
   api-gateway:
     build:
       context: ./api-gateway
@@ -176,41 +107,109 @@ services:
       - "8000:8000"
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      KAFKA_PRODUCE_TOPIC: images.raw
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-faceuser}:${POSTGRES_PASSWORD:-facepass}@postgres:5432/${POSTGRES_DB:-facedb}
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin123
-      MINIO_BUCKET_RAW: images-raw
-      MINIO_BUCKET_PROCESSED: images-processed
-      DATABASE_URL: postgresql://pixelado_user:pixelado_pass@postgres:5432/pixelado
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET_RAW: raw-images
+      MINIO_SECURE: "false"
     networks:
-      - internal
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 15s
-      timeout: 5s
-      retries: 5
+      - kafka-net
+      - storage-net
+      - db-net
+    volumes:
+      - ./api-gateway:/app
 
-  orchestrator:
+  # ── 5. ORQUESTADOR 1 — Entrada ────────────────────────────
+  orchestrator-1:
     build:
-      context: ./orchestrator
+      context: ./orchestrator-1
       dockerfile: Dockerfile
-    container_name: orchestrator
+    container_name: orchestrator-1
     restart: unless-stopped
     depends_on:
       kafka:
         condition: service_healthy
       postgres:
         condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      KAFKA_GROUP_ID: orchestrator-group
-      DATABASE_URL: postgresql://pixelado_user:pixelado_pass@postgres:5432/pixelado
-      MAX_RETRIES: 3
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-faceuser}:${POSTGRES_PASSWORD:-facepass}@postgres:5432/${POSTGRES_DB:-facedb}
+      KAFKA_DLQ_TOPIC: dead.letter.queue
     networks:
-      - internal
+      - kafka-net
+      - db-net
+    volumes:
+      - ./orchestrator-1:/app
 
+  # ── 6. ORQUESTADOR 2 — Tras detección de caras ────────────
+  orchestrator-2:
+    build:
+      context: ./orchestrator-2
+      dockerfile: Dockerfile
+    container_name: orchestrator-2
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-faceuser}:${POSTGRES_PASSWORD:-facepass}@postgres:5432/${POSTGRES_DB:-facedb}
+      KAFKA_DLQ_TOPIC: dead.letter.queue
+    networks:
+      - kafka-net
+      - db-net
+    volumes:
+      - ./orchestrator-2:/app
+
+  # ── 7. ORQUESTADOR 3 — Tras detección de edad ─────────────
+  orchestrator-3:
+    build:
+      context: ./orchestrator-3
+      dockerfile: Dockerfile
+    container_name: orchestrator-3
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-faceuser}:${POSTGRES_PASSWORD:-facepass}@postgres:5432/${POSTGRES_DB:-facedb}
+      KAFKA_DLQ_TOPIC: dead.letter.queue
+    networks:
+      - kafka-net
+      - db-net
+    volumes:
+      - ./orchestrator-3:/app
+
+  # ── 8. ORQUESTADOR 4 — Cierre del pipeline ────────────────
+  orchestrator-4:
+    build:
+      context: ./orchestrator-4
+      dockerfile: Dockerfile
+    container_name: orchestrator-4
+    restart: unless-stopped
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-faceuser}:${POSTGRES_PASSWORD:-facepass}@postgres:5432/${POSTGRES_DB:-facedb}
+      KAFKA_DLQ_TOPIC: dead.letter.queue
+    networks:
+      - kafka-net
+      - db-net
+    volumes:
+      - ./orchestrator-4:/app
+
+  # ── 9. FACE DETECTION (DC) ────────────────────────────────
   face-detection:
     build:
       context: ./face-detection
@@ -222,20 +221,25 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_GROUP_ID: face-detection-group
       KAFKA_CONSUME_TOPIC: cmd.face_detection
       KAFKA_PRODUCE_TOPIC: evt.face_detection.completed
+      KAFKA_DLQ_TOPIC: dead.letter.queue
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin123
-      MINIO_BUCKET_RAW: images-raw
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_SECURE: "false"
     networks:
-      - internal
+      - kafka-net
+      - storage-net
+    volumes:
+      - ./face-detection:/app
 
+  # ── 10/11/12. AGE DETECTION x3 (DE) ──────────────────────
+  # Las 3 instancias comparten el mismo consumer group.
+  # Kafka distribuye los mensajes entre ellas automáticamente.
   age-detection:
     build:
       context: ./age-detection
@@ -247,26 +251,25 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_GROUP_ID: age-detection-group
       KAFKA_CONSUME_TOPIC: cmd.age_detection
       KAFKA_PRODUCE_TOPIC: evt.age_detection.completed
+      KAFKA_DLQ_TOPIC: dead.letter.queue
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin123
-      MINIO_BUCKET_RAW: images-raw
-      MINOR_AGE_THRESHOLD: 18
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_SECURE: "false"
+      MINOR_AGE_THRESHOLD: "18"
     networks:
-      - internal
-    # El modelo de age detection puede ser pesado; sin límite de memoria rompe otros servicios
-    deploy:
-      resources:
-        limits:
-          memory: 2g
+      - kafka-net
+      - storage-net
+    volumes:
+      - ./age-detection:/app
+      - ./age-detection/model:/app/model
 
+  # ── 13. PIXELATION (Pixp) ─────────────────────────────────
   pixelation:
     build:
       context: ./pixelation
@@ -278,22 +281,24 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_GROUP_ID: pixelation-group
       KAFKA_CONSUME_TOPIC: cmd.pixelation
       KAFKA_PRODUCE_TOPIC: evt.pixelation.completed
+      KAFKA_DLQ_TOPIC: dead.letter.queue
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin123
-      MINIO_BUCKET_RAW: images-raw
-      MINIO_BUCKET_PROCESSED: images-processed
-      PIXEL_BLOCK_SIZE: 20
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_SECURE: "false"
+      PIXEL_BLOCK_SIZE: "20"
     networks:
-      - internal
+      - kafka-net
+      - storage-net
+    volumes:
+      - ./pixelation:/app
 
+  # ── 14. STORAGE SERVICE ───────────────────────────────────
   storage-service:
     build:
       context: ./storage-service
@@ -307,36 +312,22 @@ services:
         condition: service_healthy
       minio:
         condition: service_healthy
-      kafka-init:
-        condition: service_completed_successfully
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       KAFKA_GROUP_ID: storage-group
       KAFKA_CONSUME_TOPIC: cmd.storage
       KAFKA_PRODUCE_TOPIC: evt.storage.completed
+      KAFKA_DLQ_TOPIC: dead.letter.queue
       MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: minioadmin
-      MINIO_SECRET_KEY: minioadmin123
-      MINIO_BUCKET_PROCESSED: images-processed
-      DATABASE_URL: postgresql://pixelado_user:pixelado_pass@postgres:5432/pixelado
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET_PROCESSED: processed-images
+      MINIO_SECURE: "false"
+      MINIO_PRESIGNED_URL_EXPIRY: "3600"
+      POSTGRES_URL: postgresql://${POSTGRES_USER:-faceuser}:${POSTGRES_PASSWORD:-facepass}@postgres:5432/${POSTGRES_DB:-facedb}
     networks:
-      - internal
-
-# ─────────────────────────────────────────────
-# REDES
-# ─────────────────────────────────────────────
-
-networks:
-  internal:
-    driver: bridge
-    name: pixelado_network
-
-# ─────────────────────────────────────────────
-# VOLÚMENES
-# ─────────────────────────────────────────────
-
-volumes:
-  postgres_data:
-    name: pixelado_postgres_data
-  minio_data:
-    name: pixelado_minio_data
+      - kafka-net
+      - storage-net
+      - db-net
+    volumes:
+      - ./storage-service:/app
