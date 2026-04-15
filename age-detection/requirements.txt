@@ -1,0 +1,6 @@
+kafka-python==2.0.2
+minio==7.2.7
+deepface==0.0.93
+tf-keras
+opencv-python-headless==4.9.0.80
+numpy==1.26.4
