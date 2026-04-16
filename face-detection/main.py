@@ -60,13 +60,21 @@ def build_consumer():
     raise RuntimeError('No se pudo conectar al consumer Kafka')
 
 
-def detect_faces(img_bytes):
+def detect_faces(img_bytes: bytes) -> list[dict]:
     nparr = np.frombuffer(img_bytes, np.uint8)
     img   = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if img is None:
         raise ValueError('No se pudo decodificar la imagen')
+    alto, ancho = img.shape[:2]
+    min_lado = max(40, int(min(alto, ancho) * 0.04))
+
     gray  = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    rects = face_cascade.detectMultiScale(gray, scaleFactor=1.1, minNeighbors=5, minSize=(30, 30))
+    rects = face_cascade.detectMultiScale(
+        gray,
+        scaleFactor=1.05,
+        minNeighbors=7,
+        minSize=(min_lado, min_lado),
+    )
     caras = []
     for i, (x, y, w, h) in enumerate(rects if len(rects) > 0 else []):
         caras.append({'num_cara': i + 1, 'x': int(x), 'y': int(y), 'w': int(w), 'h': int(h)})
@@ -102,7 +110,7 @@ def process(msg, producer, minio_client):
 
 
 def main():
-    logger.info('Iniciando Face Detection Service...')
+    logger.info('Iniciando servicio de detección de caras...')
     producer     = build_producer()
     consumer     = build_consumer()
     minio_client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS, secret_key=MINIO_SECRET, secure=MINIO_SECURE)
