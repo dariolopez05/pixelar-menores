@@ -98,7 +98,7 @@ def on_storage_completed(msg, producer):
         conn.commit()
     finally:
         conn.close()
-    logger.info(f'[{guid}] COMPLETED')
+    logger.info(f'[{guid}] Solicitud completada')
 
 
 def main():

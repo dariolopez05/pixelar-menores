@@ -111,11 +111,11 @@ def process(msg, producer, minio_client):
         'timestamp':      datetime.now(timezone.utc).isoformat(),
     })
     producer.flush()
-    logger.info(f'[{guid}] evt.age_detection.completed publicado')
+    logger.info(f'[{guid}] Evento de detección de edad publicado')
 
 
 def main():
-    logger.info('Iniciando Age Detection Service...')
+    logger.info('Iniciando servicio de detección de edad...')
     producer     = build_producer()
     consumer     = build_consumer()
     minio_client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS, secret_key=MINIO_SECRET, secure=MINIO_SECURE)

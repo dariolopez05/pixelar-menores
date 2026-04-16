@@ -95,7 +95,7 @@ def process(msg, producer, minio_client):
 
 
 def main():
-    logger.info('Iniciando Storage Service...')
+    logger.info('Iniciando servicio de almacenamiento...')
     producer     = build_producer()
     consumer     = build_consumer()
     minio_client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS, secret_key=MINIO_SECRET, secure=MINIO_SECURE)
