@@ -6,6 +6,7 @@ from datetime import datetime, timezone
 
 import cv2
 import numpy as np
+from ultralytics import YOLO
 from kafka import KafkaConsumer, KafkaProducer
 from minio import Minio
 
@@ -15,18 +16,31 @@ logging.basicConfig(
 )
 logger = logging.getLogger('face-detection')
 
-KAFKA_BOOTSTRAP = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
-CONSUME_TOPIC   = os.environ.get('KAFKA_CONSUME_TOPIC',     'cmd.face_detection')
-PRODUCE_TOPIC   = os.environ.get('KAFKA_PRODUCE_TOPIC',     'evt.face_detection.completed')
-DLQ_TOPIC       = os.environ.get('KAFKA_DLQ_TOPIC',         'dead.letter.queue')
-GROUP_ID        = os.environ.get('KAFKA_GROUP_ID',          'face-detection-group')
-MINIO_ENDPOINT  = os.environ.get('MINIO_ENDPOINT',          'minio:9000')
-MINIO_ACCESS    = os.environ.get('MINIO_ACCESS_KEY',        'minioadmin')
-MINIO_SECRET    = os.environ.get('MINIO_SECRET_KEY',        'minioadmin')
-MINIO_SECURE    = os.environ.get('MINIO_SECURE',            'false').lower() == 'true'
+KAFKA_BOOTSTRAP  = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
+CONSUME_TOPIC    = os.environ.get('KAFKA_CONSUME_TOPIC',     'cmd.face_detection')
+PRODUCE_TOPIC    = os.environ.get('KAFKA_PRODUCE_TOPIC',     'evt.face_detection.completed')
+DLQ_TOPIC        = os.environ.get('KAFKA_DLQ_TOPIC',         'dead.letter.queue')
+GROUP_ID         = os.environ.get('KAFKA_GROUP_ID',          'face-detection-group')
+MINIO_ENDPOINT   = os.environ.get('MINIO_ENDPOINT',          'minio:9000')
+MINIO_ACCESS     = os.environ.get('MINIO_ACCESS_KEY',        'minioadmin')
+MINIO_SECRET     = os.environ.get('MINIO_SECRET_KEY',        'minioadmin')
+MINIO_SECURE     = os.environ.get('MINIO_SECURE',            'false').lower() == 'true'
+MODEL_PATH     = os.environ.get('YOLO_MODEL_PATH',     '/app/yolov8n-face.pt')
+CONF_THRESHOLD = float(os.environ.get('YOLO_CONF_THRESHOLD', '0.4'))
 
-CASCADE_PATH = cv2.data.haarcascades + 'haarcascade_frontalface_default.xml'
-face_cascade = cv2.CascadeClassifier(CASCADE_PATH)
+def _load_model() -> YOLO:
+    if os.path.exists(MODEL_PATH):
+        logger.info(f'Cargando modelo YOLO desde {MODEL_PATH}...')
+        m = YOLO(MODEL_PATH)
+    else:
+        # Ultralytics descarga automáticamente yolov8n-face.pt si no está en local
+        logger.warning(f'{MODEL_PATH} no encontrado — descargando con ultralytics...')
+        m = YOLO('yolov8n-face.pt')
+    logger.info('Modelo YOLO listo')
+    return m
+
+
+model = _load_model()
 
 
 def build_producer():
@@ -65,19 +79,20 @@ def detect_faces(img_bytes: bytes) -> list[dict]:
     img   = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
     if img is None:
         raise ValueError('No se pudo decodificar la imagen')
-    alto, ancho = img.shape[:2]
-    min_lado = max(40, int(min(alto, ancho) * 0.04))
 
-    gray  = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    rects = face_cascade.detectMultiScale(
-        gray,
-        scaleFactor=1.05,
-        minNeighbors=7,
-        minSize=(min_lado, min_lado),
-    )
-    caras = []
-    for i, (x, y, w, h) in enumerate(rects if len(rects) > 0 else []):
-        caras.append({'num_cara': i + 1, 'x': int(x), 'y': int(y), 'w': int(w), 'h': int(h)})
+    results = model(img, conf=CONF_THRESHOLD, verbose=False)
+    caras   = []
+    for i, box in enumerate(results[0].boxes):
+        x1, y1, x2, y2 = box.xyxy[0].tolist()
+        conf = float(box.conf[0])
+        caras.append({
+            'num_cara':  i + 1,
+            'x':         int(x1),
+            'y':         int(y1),
+            'w':         int(x2 - x1),
+            'h':         int(y2 - y1),
+            'confianza': round(conf, 3),
+        })
     return caras
 
 
@@ -110,7 +125,7 @@ def process(msg, producer, minio_client):
 
 
 def main():
-    logger.info('Iniciando servicio de detección de caras...')
+    logger.info('Iniciando servicio de detección de caras (YOLOv8)...')
     producer     = build_producer()
     consumer     = build_consumer()
     minio_client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS, secret_key=MINIO_SECRET, secure=MINIO_SECURE)
@@ -125,7 +140,7 @@ def main():
             logger.error(f'[{guid}] Error: {e}', exc_info=True)
             try:
                 producer.send(DLQ_TOPIC, key='face-detection-error', value={
-                    'service': 'face-detection', 'error': str(e), 'message': msg
+                    'service': 'face-detection', 'error': str(e), 'message': msg,
                 })
                 producer.flush()
             except Exception:

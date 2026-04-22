@@ -4,10 +4,9 @@
 - [x] Infraestructura base levantada (Kafka, PostgreSQL, MinIO)
 - [x] API Gateway
 - [x] Orquestadores (x4)
-- [x] Face Detection Service (1 contenedor)
-- [x] Age Detection Service (1 contenedor)
+- [x] Face Detection Service — YOLOv8 (`yolov8n-face.pt` incluido en imagen Docker)
+- [x] Age Detection Service — DeepFace, procesa una cara a la vez
 - [x] Pixelation Service
-- [x] Storage Service
 - [ ] Pruebas end-to-end
 - [ ] Entregables
 
@@ -86,18 +85,20 @@ Hay 4 orquestadores especializados. Ninguno procesa imágenes; solo gestionan el
 
 ### Orquestador 2 — Tras detección de caras
 - **Escucha:** `evt.face_detection.completed`
-- **Hace:** actualiza `Solicitud` (`Fin_Deteccion_Caras`, `Num_Imagenes_Total`), inserta filas en `Imagenes`
-- **Publica:** `cmd.age_detection` (si hay caras) o `cmd.storage` (si no hay caras)
+- **Hace:** actualiza `Solicitud` (`Fin_Deteccion_Caras`, `Num_Imagenes_Total`), inserta filas en `Imagenes` con bbox
+- Descarga imagen cruda de MinIO, recorta cada cara (margen 10%), sube cada recorte a `face-crops/{guid}/cara_N.{ext}`
+- **Publica:** N mensajes `cmd.age_detection` (uno por cara); si 0 caras → `cmd.pixelation` con lista vacía
 
-### Orquestador 3 — Tras detección de edad
-- **Escucha:** `evt.age_detection.completed`
-- **Hace:** actualiza `Solicitud` (`Inicio_Edad`, `Fin_Edad`)
-- **Publica:** `cmd.pixelation` (si hay menores) o `cmd.storage` (si no hay menores)
+### Orquestador 3 — Agregador de edades
+- **Escucha:** `evt.age_detection.completed` (un mensaje por cara)
+- **Hace:** acumula resultados en memoria; actualiza `Imagenes` (Edad, Es_Menor, Escore); actualiza `Solicitud` (Inicio_Edad al primero, Fin_Edad al último)
+- Cuando llegan todos los resultados (N == Num_Imagenes_Total): publica `cmd.pixelation`
+- **Publica:** `cmd.pixelation` con lista de caras menores (puede ser vacía)
 
 ### Orquestador 4 — Cierre del pipeline
-- **Escucha:** `evt.pixelation.completed` y `evt.storage.completed`
-- **Hace (pixelation):** actualiza `Solicitud` (`Inicio_Pixelado`, `Fin_Pixelado`, `Num_Imagenes_Pixeladas`) → publica `cmd.storage`
-- **Hace (storage):** marca `Solicitud` como `COMPLETED` con timestamps finales
+- **Escucha:** `evt.pixelation.completed`
+- **Hace:** genera URL presignada (1h) de `processed-images/{guid}.{ext}` usando MinIO
+- Actualiza `Solicitud`: `Id_Fichero` (URL), `Fin_Solicitud`, `Inicio/Fin_Pixelado`, `Inicio/Fin_Almacenamiento_Solicitud`, `Num_Imagenes_Pixeladas`, Estado → `COMPLETED`
 
 ### Paso 3.1 — Levantar y probar
 ```bash
@@ -123,8 +124,10 @@ face-detection/
 - **1 solo contenedor** que procesa todas las caras de cada imagen
 - Consume `cmd.face_detection`
 - Descarga imagen de MinIO (`raw-images/{guid}.{ext}`)
-- Usa **OpenCV Haar Cascades** (`haarcascade_frontalface_default.xml`) para detectar todas las caras
-- Publica `evt.face_detection.completed` con la lista completa de bounding boxes `[{num_cara, x, y, w, h}]`
+- Usa **YOLOv8** (`yolov8n-face.pt`, modelo incluido en la imagen Docker) para detectar caras frontales y de perfil
+- Publica `evt.face_detection.completed` con la lista completa de bounding boxes `[{num_cara, x, y, w, h, confianza}]`
+
+> El modelo `yolov8n-face.pt` debe existir en `face-detection/` antes del `docker compose build`. Se descarga de: https://github.com/ultralytics/assets/releases/download/v0.0.0/yolov8n-face.pt
 
 ### Paso 4.3 — Levantar y probar
 ```bash
@@ -145,12 +148,12 @@ age-detection/
 ```
 
 ### Paso 5.2 — Implementación
-- **1 solo contenedor**
-- Consume `cmd.age_detection`
-- Descarga imagen de MinIO, recorta cada cara con margen del 10%
-- Pasa cada recorte por **DeepFace** (`actions=['age']`)
+- **1 solo contenedor**, procesa **una cara a la vez** (mensaje por cara)
+- Consume `cmd.age_detection` (N mensajes por imagen, uno por cara recortada)
+- Descarga el recorte de MinIO (`face-crops/{guid}/cara_N.{ext}`)
+- Pasa el recorte por **DeepFace** (`actions=['age']`, `enforce_detection=False`)
 - Clasifica como menor si `edad < 18`
-- Publica `evt.age_detection.completed` con `{edad_estimada, es_menor, confianza_modelo}` por cara
+- Publica `evt.age_detection.completed` con `{guid, num_cara, id_imagen, edad, es_menor, escore}` por cara
 
 > La primera build descarga los pesos del modelo (~500 MB). Puede tardar varios minutos.
 
@@ -185,69 +188,80 @@ docker compose up -d --build pixelation
 
 ---
 
-## FASE 7 — Storage Service ✅
+---
 
-### Paso 7.1 — Estructura
-```
-storage-service/
-├── Dockerfile
-├── requirements.txt
-└── main.py
-```
+## FASE 7 — Prueba del flujo completo
 
-### Paso 7.2 — Implementación
-- Consume `cmd.storage`
-- Genera URL presignada (1 hora de validez) del objeto en MinIO
-- Actualiza `Solicitud.Id_Fichero` en PostgreSQL con la URL
-- Publica `evt.storage.completed`
-
-### Paso 7.3 — Levantar y probar
+### Paso 7.1 — Levantar todo
 ```bash
-docker compose up -d --build storage-service
+docker compose up -d --build
 ```
+Verifica que los 11 contenedores están en verde:
+```bash
+docker compose ps
+```
+
+### Paso 7.2 — Enviar una imagen
+Coloca una imagen en la carpeta `ejemplos/` (créala si no existe) y ejecuta:
+```bash
+curl -X POST http://localhost:8000/images -F "file=@ejemplos/foto.jpg" -s | python -m json.tool
+```
+Guarda el `guid_solicitud` que devuelve, p.ej.:
+```json
+{
+  "guid_solicitud": "abc123...",
+  "id_solicitud": 1,
+  "estado": "PENDING"
+}
+```
+
+### Paso 7.3 — Seguir el pipeline en tiempo real
+```bash
+docker compose logs -f orchestrator-1 orchestrator-2 orchestrator-3 orchestrator-4 face-detection age-detection pixelation
+```
+Debes ver el flujo: `images.raw` → `cmd.face_detection` → `evt.face_detection.completed` → `cmd.age_detection` → `evt.age_detection.completed` → `cmd.pixelation` → `evt.pixelation.completed` → `COMPLETED`
+
+### Paso 7.4 — Consultar el resultado
+```bash
+curl -s http://localhost:8000/images/{guid_solicitud} | python -m json.tool
+```
+Cuando el estado sea `COMPLETED`, `url_resultado` contiene la URL presignada de la imagen procesada.
+
+### Paso 7.5 — Consultar una cara individual
+```bash
+curl -s http://localhost:8000/images/{guid_solicitud}/cara/1 | python -m json.tool
+```
+Devuelve bbox, edad estimada, `es_menor` y URL presignada del recorte en `face-crops`.
+
+### Paso 7.6 — Listar todas las solicitudes
+```bash
+curl -s "http://localhost:8000/images?limit=10&offset=0" | python -m json.tool
+# Filtrar por estado:
+curl -s "http://localhost:8000/images?estado=COMPLETED" | python -m json.tool
+```
+
+### Paso 7.7 — Verificar imagen en MinIO
+Abre **http://localhost:9001** (usuario `minioadmin` / contraseña `minioadmin`):
+- Bucket `raw-images` → imagen original
+- Bucket `face-crops` → recortes individuales por cara
+- Bucket `processed-images` → imagen con menores pixelados
+
+### Paso 7.8 — Verificar base de datos
+```bash
+docker compose exec postgres psql -U faceuser -d facedb -c "SELECT Id_Solicitud, GUID_Solicitud, Estado, Num_Imagenes_Total, Num_Imagenes_Pixeladas FROM Solicitud;"
+docker compose exec postgres psql -U faceuser -d facedb -c "SELECT Id_Imagen, Num_Cara, Edad, Es_Menor, Escore FROM Imagenes;"
+```
+
+### Paso 7.9 — Dataset de prueba
+Dataset oficial con edades etiquetadas: https://www.kaggle.com/datasets/frabbisw/facial-age
+
+Las imágenes tienen la edad en el nombre del fichero, útil para verificar que el modelo acierta.
+
+> El dataset no va en el repositorio. Descárgalo localmente en `test-images/`.
 
 ---
 
-## FASE 8 — Prueba del flujo completo
-
-### Paso 8.1 — Descargar el dataset
-Dataset oficial: https://www.kaggle.com/datasets/frabbisw/facial-age
-
-1. Descarga el dataset de Kaggle (requiere cuenta gratuita)
-2. Extrae las imágenes en una carpeta local `test-images/` (no se sube al repo)
-3. Las imágenes tienen la edad en el nombre del fichero, útil para verificar que el modelo acierta
-
-> El dataset no va en el repositorio. Solo se usa localmente para las pruebas.
-
-### Paso 8.2 — Levantar todo
-```bash
-docker compose up -d
-```
-
-### Paso 8.3 — Enviar una imagen con menores
-```bash
-curl -X POST http://localhost:8000/images -F "file=@foto_con_menor.jpg"
-# Guarda el guid devuelto
-```
-
-### Paso 8.4 — Seguir el pipeline en los logs
-```bash
-docker compose logs -f
-```
-Debes ver el flujo: `images.raw` → `cmd.face_detection` → `evt.face_detection.completed` → ... → `COMPLETED`
-
-### Paso 8.5 — Recoger el resultado
-```bash
-curl http://localhost:8000/images/{guid}
-# Debe devolver estado COMPLETED
-```
-
-### Paso 8.6 — Verificar imagen en MinIO
-Abre **http://localhost:9001** → bucket `processed-images` → objeto `{guid}.{ext}` → comprueba que los menores están pixelados.
-
----
-
-## FASE 9 — Entregables
+## FASE 8 — Entregables
 
 ### Paso 9.1 — README.md
 Crear un `README.md` con:
@@ -296,13 +310,17 @@ git push -u origin main
 # Ver estado de todos los contenedores
 docker compose ps
 
-# Ver logs de un servicio concreto
-docker compose logs -f orchestrator-1
-docker compose logs -f face-detection
-docker compose logs -f age-detection
+# Ver logs de un servicio concreto (últimas 50 líneas)
+docker compose logs --tail=50 face-detection
+docker compose logs --tail=50 age-detection
+docker compose logs --tail=50 orchestrator-2
+docker compose logs --tail=50 orchestrator-3
 
 # Reconstruir y reiniciar un servicio tras modificarlo
 docker compose up -d --build face-detection
+
+# Reconstruir todo desde cero
+docker compose up -d --build
 
 # Parar todo
 docker compose down
@@ -314,5 +332,18 @@ docker compose down -v
 docker exec kafka kafka-console-consumer \
   --bootstrap-server localhost:9092 \
   --topic images.raw \
+  --from-beginning
+
+# Ver todos los topics creados
+docker exec kafka kafka-topics --bootstrap-server localhost:9092 --list
+
+# Consultar BD directamente
+docker compose exec postgres psql -U faceuser -d facedb -c "SELECT * FROM Solicitud;"
+docker compose exec postgres psql -U faceuser -d facedb -c "SELECT * FROM Imagenes;"
+
+# Dead-letter queue — ver mensajes de error
+docker exec kafka kafka-console-consumer \
+  --bootstrap-server localhost:9092 \
+  --topic dead.letter.queue \
   --from-beginning
 ```
