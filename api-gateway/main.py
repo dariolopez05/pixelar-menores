@@ -22,7 +22,8 @@ KAFKA_BOOTSTRAP        = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092'
 PRODUCE_TOPIC          = os.environ.get('KAFKA_PRODUCE_TOPIC',     'images.raw')
 POSTGRES_URL           = os.environ.get('POSTGRES_URL', 'postgresql://faceuser:facepass@postgres:5432/facedb') \
                              .replace('postgresql+asyncpg://', 'postgresql://')
-MINIO_ENDPOINT         = os.environ.get('MINIO_ENDPOINT',   'minio:9000')
+MINIO_ENDPOINT         = os.environ.get('MINIO_ENDPOINT',        'minio:9000')
+MINIO_PUBLIC_ENDPOINT  = os.environ.get('MINIO_PUBLIC_ENDPOINT', 'host.docker.internal:9000')
 MINIO_ACCESS           = os.environ.get('MINIO_ACCESS_KEY', 'minioadmin')
 MINIO_SECRET           = os.environ.get('MINIO_SECRET_KEY', 'minioadmin')
 MINIO_BUCKET_RAW       = os.environ.get('MINIO_BUCKET_RAW',       'raw-images')
@@ -32,7 +33,8 @@ MINIO_SECURE           = os.environ.get('MINIO_SECURE', 'false').lower() == 'tru
 PRESIGNED_EXPIRY       = int(os.environ.get('MINIO_PRESIGNED_URL_EXPIRY', '3600'))
 
 kafka_producer: KafkaProducer | None = None
-minio_client:   Minio | None = None
+minio_client:        Minio | None = None  # operaciones internas
+minio_public_client: Minio | None = None  # generación de presigned URLs públicas
 
 
 def build_kafka_producer() -> KafkaProducer:
@@ -62,12 +64,14 @@ def ensure_minio_buckets(client: Minio):
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    global kafka_producer, minio_client
-    kafka_producer = build_kafka_producer()
-    minio_client   = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS,
-                           secret_key=MINIO_SECRET, secure=MINIO_SECURE)
+    global kafka_producer, minio_client, minio_public_client
+    kafka_producer       = build_kafka_producer()
+    minio_client         = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS,
+                                 secret_key=MINIO_SECRET, secure=MINIO_SECURE)
+    minio_public_client  = Minio(MINIO_PUBLIC_ENDPOINT, access_key=MINIO_ACCESS,
+                                 secret_key=MINIO_SECRET, secure=MINIO_SECURE)
     ensure_minio_buckets(minio_client)
-    logger.info('API Gateway listo')
+    logger.info(f'API Gateway listo (presigned URLs → {MINIO_PUBLIC_ENDPOINT})')
     yield
     kafka_producer.close()
 
@@ -81,11 +85,11 @@ def get_db():
 
 def _make_presigned(bucket: str, path: str) -> str:
     try:
-        return minio_client.presigned_get_object(
+        return minio_public_client.presigned_get_object(
             bucket, path, expires=timedelta(seconds=PRESIGNED_EXPIRY)
         )
     except Exception:
-        return f'http://{MINIO_ENDPOINT}/{bucket}/{path}'
+        return f'http://{MINIO_PUBLIC_ENDPOINT}/{bucket}/{path}'
 
 
 def insertar_solicitud(guid: str, url_original: str) -> int:

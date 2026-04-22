@@ -20,11 +20,12 @@ logger = logging.getLogger('orchestrator-4')
 KAFKA_BOOTSTRAP  = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
 POSTGRES_URL     = os.environ.get('POSTGRES_URL', 'postgresql://faceuser:facepass@postgres:5432/facedb')
 DLQ_TOPIC        = os.environ.get('KAFKA_DLQ_TOPIC', 'dead.letter.queue')
-MINIO_ENDPOINT   = os.environ.get('MINIO_ENDPOINT',   'minio:9000')
-MINIO_ACCESS     = os.environ.get('MINIO_ACCESS_KEY', 'minioadmin')
-MINIO_SECRET     = os.environ.get('MINIO_SECRET_KEY', 'minioadmin')
-MINIO_SECURE     = os.environ.get('MINIO_SECURE', 'false').lower() == 'true'
-PRESIGNED_EXPIRY = int(os.environ.get('MINIO_PRESIGNED_URL_EXPIRY', '3600'))
+MINIO_ENDPOINT        = os.environ.get('MINIO_ENDPOINT',        'minio:9000')
+MINIO_PUBLIC_ENDPOINT = os.environ.get('MINIO_PUBLIC_ENDPOINT', 'host.docker.internal:9000')
+MINIO_ACCESS          = os.environ.get('MINIO_ACCESS_KEY', 'minioadmin')
+MINIO_SECRET          = os.environ.get('MINIO_SECRET_KEY', 'minioadmin')
+MINIO_SECURE          = os.environ.get('MINIO_SECURE', 'false').lower() == 'true'
+PRESIGNED_EXPIRY      = int(os.environ.get('MINIO_PRESIGNED_URL_EXPIRY', '3600'))
 
 
 def build_kafka(group_id):
@@ -57,7 +58,8 @@ def get_db():
 def main():
     logger.info('Iniciando Orquestador 4...')
     producer, consumer = build_kafka('o4-group')
-    minio_client = Minio(MINIO_ENDPOINT, access_key=MINIO_ACCESS, secret_key=MINIO_SECRET, secure=MINIO_SECURE)
+    minio_client        = Minio(MINIO_ENDPOINT,        access_key=MINIO_ACCESS, secret_key=MINIO_SECRET, secure=MINIO_SECURE)
+    minio_public_client = Minio(MINIO_PUBLIC_ENDPOINT, access_key=MINIO_ACCESS, secret_key=MINIO_SECRET, secure=MINIO_SECURE)
 
     for message in consumer:
         msg  = message.value
@@ -72,11 +74,11 @@ def main():
 
             # Generar URL presignada de la imagen procesada
             try:
-                url_resultado = minio_client.presigned_get_object(
+                url_resultado = minio_public_client.presigned_get_object(
                     bucket_dst, path_dst, expires=timedelta(seconds=PRESIGNED_EXPIRY)
                 )
             except Exception:
-                url_resultado = f'http://{MINIO_ENDPOINT}/{bucket_dst}/{path_dst}'
+                url_resultado = f'http://{MINIO_PUBLIC_ENDPOINT}/{bucket_dst}/{path_dst}'
 
             conn = get_db()
             try:
