@@ -9,7 +9,11 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 WORKDIR /app
 
 COPY requirements.txt .
+
 RUN pip install --no-cache-dir -r requirements.txt
+
+# El modelo debe estar en face-detection/yolov8n-face.pt antes del build
+COPY yolov8n-face.pt /app/yolov8n-face.pt
 
 COPY . .
 
