@@ -16,16 +16,16 @@ logging.basicConfig(
 )
 logger = logging.getLogger('pixelation')
 
-KAFKA_BOOTSTRAP   = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
-CONSUME_TOPIC     = os.environ.get('KAFKA_CONSUME_TOPIC',     'cmd.pixelation')
-PRODUCE_TOPIC     = os.environ.get('KAFKA_PRODUCE_TOPIC',     'evt.pixelation.completed')
-DLQ_TOPIC         = os.environ.get('KAFKA_DLQ_TOPIC',         'dead.letter.queue')
-GROUP_ID          = os.environ.get('KAFKA_GROUP_ID',          'pixelation-group')
-MINIO_ENDPOINT    = os.environ.get('MINIO_ENDPOINT',          'minio:9000')
-MINIO_ACCESS      = os.environ.get('MINIO_ACCESS_KEY',        'minioadmin')
-MINIO_SECRET      = os.environ.get('MINIO_SECRET_KEY',        'minioadmin')
-MINIO_SECURE      = os.environ.get('MINIO_SECURE',            'false').lower() == 'true'
-PIXEL_BLOCK_SIZE  = int(os.environ.get('PIXEL_BLOCK_SIZE',    '20'))
+KAFKA_BOOTSTRAP  = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
+CONSUME_TOPIC    = os.environ.get('KAFKA_CONSUME_TOPIC',     'cmd.pixelation')
+PRODUCE_TOPIC    = os.environ.get('KAFKA_PRODUCE_TOPIC',     'evt.pixelation.completed')
+DLQ_TOPIC        = os.environ.get('KAFKA_DLQ_TOPIC',         'dead.letter.queue')
+GROUP_ID         = os.environ.get('KAFKA_GROUP_ID',          'pixelation-group')
+MINIO_ENDPOINT   = os.environ.get('MINIO_ENDPOINT',          'minio:9000')
+MINIO_ACCESS     = os.environ.get('MINIO_ACCESS_KEY',        'minioadmin')
+MINIO_SECRET     = os.environ.get('MINIO_SECRET_KEY',        'minioadmin')
+MINIO_SECURE     = os.environ.get('MINIO_SECURE',            'false').lower() == 'true'
+PIXEL_BLOCK_SIZE = int(os.environ.get('PIXEL_BLOCK_SIZE',    '20'))
 
 
 def build_producer():
@@ -84,20 +84,28 @@ def process(msg, producer, minio_client):
     response.close()
     response.release_conn()
 
-    nparr = np.frombuffer(img_bytes, np.uint8)
-    img   = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    if not caras_menores:
+        # Sin menores: copiar imagen original a processed-images sin modificar
+        minio_client.put_object(bucket_dst, path_dst, BytesIO(img_bytes), len(img_bytes),
+                                content_type='image/jpeg')
+        duracion_ms = int((time.time() - t0) * 1000)
+        logger.info(f'[{guid}] Sin menores — imagen original copiada → {bucket_dst}/{path_dst} ({duracion_ms} ms)')
+    else:
+        nparr = np.frombuffer(img_bytes, np.uint8)
+        img   = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-    for cara in caras_menores:
-        img = pixelar(img, cara['x'], cara['y'], cara['w'], cara['h'], PIXEL_BLOCK_SIZE)
-        logger.info(f'[{guid}] Cara {cara.get("num_cara", "?")} pixelada')
+        for cara in caras_menores:
+            img = pixelar(img, cara['x'], cara['y'], cara['w'], cara['h'], PIXEL_BLOCK_SIZE)
+            logger.info(f'[{guid}] Cara {cara.get("num_cara", "?")} pixelada')
 
-    ext       = '.' + path_src.rsplit('.', 1)[-1] if '.' in path_src else '.jpg'
-    _, buffer = cv2.imencode(ext, img)
-    out_bytes = buffer.tobytes()
+        ext       = '.' + path_src.rsplit('.', 1)[-1] if '.' in path_src else '.jpg'
+        _, buffer = cv2.imencode(ext, img)
+        out_bytes = buffer.tobytes()
 
-    minio_client.put_object(bucket_dst, path_dst, BytesIO(out_bytes), len(out_bytes), content_type='image/jpeg')
-    duracion_ms = int((time.time() - t0) * 1000)
-    logger.info(f'[{guid}] Imagen pixelada subida → {bucket_dst}/{path_dst} ({duracion_ms} ms)')
+        minio_client.put_object(bucket_dst, path_dst, BytesIO(out_bytes), len(out_bytes),
+                                content_type='image/jpeg')
+        duracion_ms = int((time.time() - t0) * 1000)
+        logger.info(f'[{guid}] {len(caras_menores)} cara(s) pixelada(s) → {bucket_dst}/{path_dst} ({duracion_ms} ms)')
 
     producer.send(PRODUCE_TOPIC, key=guid, value={
         'guid_solicitud':  guid,
@@ -127,7 +135,7 @@ def main():
             logger.error(f'[{guid}] Error: {e}', exc_info=True)
             try:
                 producer.send(DLQ_TOPIC, key='pixelation-error', value={
-                    'service': 'pixelation', 'error': str(e), 'message': msg
+                    'service': 'pixelation', 'error': str(e), 'message': msg,
                 })
                 producer.flush()
             except Exception:

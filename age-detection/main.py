@@ -61,9 +61,9 @@ def build_consumer():
     raise RuntimeError('No se pudo conectar al consumer Kafka')
 
 
-def estimate_age(face_crop):
+def estimate_age(face_img):
     try:
-        result = DeepFace.analyze(face_crop, actions=['age'], enforce_detection=False, silent=True)
+        result = DeepFace.analyze(face_img, actions=['age'], enforce_detection=False, silent=True)
         return float(result[0]['age']), 0.85
     except Exception as e:
         logger.warning(f'DeepFace falló: {e} — usando edad por defecto (25)')
@@ -71,47 +71,45 @@ def estimate_age(face_crop):
 
 
 def process(msg, producer, minio_client):
-    guid         = msg['guid_solicitud']
-    id_solicitud = msg['id_solicitud']
-    bucket       = msg.get('minio_bucket', 'raw-images')
-    minio_path   = msg['minio_path']
-    caras_input  = msg.get('caras', [])
+    guid            = msg['guid_solicitud']
+    id_solicitud    = msg['id_solicitud']
+    num_cara        = msg['num_cara']
+    id_imagen       = msg['id_imagen']
+    crops_bucket    = msg.get('face_crops_bucket', 'face-crops')
+    crops_path      = msg['face_crops_path']
+    raw_bucket      = msg.get('minio_bucket', 'raw-images')
+    raw_path        = msg['minio_path']
+    num_total_caras = msg['num_total_caras']
+    x, y, w, h      = msg['x'], msg['y'], msg['w'], msg['h']
 
-    response  = minio_client.get_object(bucket, minio_path)
+    response  = minio_client.get_object(crops_bucket, crops_path)
     img_bytes = response.read()
     response.close()
     response.release_conn()
 
-    nparr = np.frombuffer(img_bytes, np.uint8)
-    img   = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    nparr    = np.frombuffer(img_bytes, np.uint8)
+    face_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
-    caras_resultado = []
-    for cara in caras_input:
-        x, y, w, h = cara['x'], cara['y'], cara['w'], cara['h']
-        margin = int(min(w, h) * 0.1)
-        crop   = img[max(0, y-margin):y+h+margin, max(0, x-margin):x+w+margin]
+    age, confidence = estimate_age(face_img)
+    es_menor        = age < MINOR_THRESHOLD
 
-        age, confidence = estimate_age(crop)
-        es_menor        = age < MINOR_THRESHOLD
-
-        logger.info(f'[{guid}] Cara {cara["num_cara"]}: {age:.1f} años → {"MENOR" if es_menor else "ADULTO"}')
-        caras_resultado.append({
-            **cara,
-            'edad_estimada':    round(age, 1),
-            'es_menor':         es_menor,
-            'confianza_modelo': round(confidence, 3),
-        })
+    logger.info(f'[{guid}] Cara {num_cara}: {age:.1f} años → {"MENOR" if es_menor else "ADULTO"}')
 
     producer.send(PRODUCE_TOPIC, key=guid, value={
-        'guid_solicitud': guid,
-        'id_solicitud':   id_solicitud,
-        'minio_bucket':   bucket,
-        'minio_path':     minio_path,
-        'caras':          caras_resultado,
-        'timestamp':      datetime.now(timezone.utc).isoformat(),
+        'guid_solicitud':    guid,
+        'id_solicitud':      id_solicitud,
+        'num_cara':          num_cara,
+        'id_imagen':         id_imagen,
+        'edad_estimada':     round(age, 1),
+        'es_menor':          es_menor,
+        'confianza_modelo':  round(confidence, 4),
+        'num_total_caras':   num_total_caras,
+        'minio_bucket':      raw_bucket,
+        'minio_path':        raw_path,
+        'x': x, 'y': y, 'w': w, 'h': h,
+        'timestamp':         datetime.now(timezone.utc).isoformat(),
     })
     producer.flush()
-    logger.info(f'[{guid}] Evento de detección de edad publicado')
 
 
 def main():
@@ -130,7 +128,7 @@ def main():
             logger.error(f'[{guid}] Error: {e}', exc_info=True)
             try:
                 producer.send(DLQ_TOPIC, key='age-detection-error', value={
-                    'service': 'age-detection', 'error': str(e), 'message': msg
+                    'service': 'age-detection', 'error': str(e), 'message': msg,
                 })
                 producer.flush()
             except Exception:
