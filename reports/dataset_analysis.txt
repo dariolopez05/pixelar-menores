@@ -1,0 +1,75 @@
+=================================================================
+  REPORTE DE DATASET — CLASIFICADOR MENOR/ADULTO
+  Generado: 2026-04-22T20:04:01
+=================================================================
+
+── VISIÓN GENERAL ──────────────────────────────────────────
+  Imágenes totales     : 9,778
+  Carpetas de edad     : 99
+  Rango de edades      : 1–110 años
+
+── BALANCE DE CLASES ───────────────────────────────────────
+  Menores (<18)  : 3,925 imgs  (40.1%)  en 17 edades
+  Adultos (≥18)  : 5,853 imgs  (59.9%)  en 82 edades
+  Ratio M/A      : 0.671  ⚠  desbalance moderado
+
+── RESOLUCIÓN DE IMÁGENES ──────────────────────────────────
+  Todas las imágenes son 200×200 px  ✓
+
+── CONCENTRACIÓN DE DATOS ──────────────────────────────────
+  Top-5 edades aportan el 24.6% del total:
+    Edad   1 (MENOR): 1112  ███████████████████████████
+    Edad   2 (MENOR):  475  ███████████
+    Edad   3 (MENOR):  284  ███████
+    Edad  26 (adulto):  279  ██████
+    Edad   4 (MENOR):  260  ██████
+  Edad 1 representa el 28.3% de todos los menores
+
+── EDADES LIMÍTROFES (16–20) ───────────────────────────────
+  Edad 16:  212 imgs  [MENOR ←]
+  Edad 17:  103 imgs  [MENOR ←]
+  Edad 18:  181 imgs  [→ adulto]
+  Edad 19:   58 imgs  [→ adulto]
+  Edad 20:  103 imgs  [→ adulto]
+
+── EDADES CON POCOS DATOS (< 50 imgs) ─────────────────────
+  Total edades afectadas: 30
+  Menores escasos      : ninguno
+  Adultos escasos (top): [33, 44, 63, 64, 67, 69, 71, 73, 74, 76, 77, 78, 79, 81, 82]
+
+── DISTRIBUCIÓN POR DÉCADAS ────────────────────────────────
+    0s (MENOR):  2946  █████████████████████████████████████████████████
+   10s (MENOR):  1218  ████████████████████
+   20s (adulto):  1517  █████████████████████████
+   30s (adulto):  1034  █████████████████
+   40s (adulto):   675  ███████████
+   50s (adulto):   938  ███████████████
+   60s (adulto):   656  ██████████
+   70s (adulto):   379  ██████
+   80s (adulto):   317  █████
+   90s (adulto):    93  █
+  100s (adulto):     3  
+  110s (adulto):     2  
+
+── DIAGNÓSTICO Y RECOMENDACIONES ───────────────────────────
+  [WARN] Ratio menor/adulto = 0.671. El modelo tenderá a predecir
+         'adulto' más fácilmente. Mitigación: class_weight='balanced'
+         (ya incluido en el script de entrenamiento).
+
+  [CRIT] Edad 1 = 28.3% de todos los menores.
+         Riesgo: el modelo aprende 'cara de bebé' como proxy de menor.
+         Recomendación: limitar edad 1 a max ~200 imgs antes de entrenar
+         (añade 'MAX_IMAGES_PER_AGE = 200' en el script de entrenamiento).
+
+  [WARN] 15 edades adultas con menos de 50 imgs (60–110 años).
+         El modelo generalizará mal con personas mayores.
+         Si el sistema procesa vídeos con ancianos, considera ampliar el dataset.
+
+  [INFO] Zona limítrofe: edad 17=103 imgs, edad 18=181 imgs.
+         La frontera 17/18 es la más crítica. Ambas tienen datos suficientes.
+         Si el recall en frontera es bajo, prueba MINOR_PROB_THRESHOLD=0.4.
+
+  [INFO] Todas las imágenes son 200×200 px (uniforme, ideal).
+         El script entrena con IMG_SIZE=(200,200) para no perder información.
+
+=================================================================
