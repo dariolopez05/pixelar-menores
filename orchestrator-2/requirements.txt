@@ -1,2 +1,5 @@
 kafka-python==2.0.2
 psycopg2-binary==2.9.9
+minio==7.2.7
+opencv-python-headless==4.9.0.80
+numpy==1.26.4

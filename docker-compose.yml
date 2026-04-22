@@ -114,6 +114,7 @@ services:
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       MINIO_BUCKET_RAW: raw-images
       MINIO_BUCKET_PROCESSED: processed-images
+      MINIO_BUCKET_FACES: face-crops
       MINIO_PRESIGNED_URL_EXPIRY: "3600"
       MINIO_SECURE: "false"
     networks:
@@ -145,7 +146,7 @@ services:
     volumes:
       - ./orchestrator-1:/app
 
-  # ── 6. ORQUESTADOR 2 — Tras detección de caras ────────────
+  # ── 6. ORQUESTADOR 2 — Recorte y despacho por cara ────────
   orchestrator-2:
     build:
       context: ./orchestrator-2
@@ -157,17 +158,28 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       POSTGRES_URL: postgresql://${POSTGRES_USER:-faceuser}:${POSTGRES_PASSWORD:-facepass}@postgres:5432/${POSTGRES_DB:-facedb}
       KAFKA_DLQ_TOPIC: dead.letter.queue
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET_RAW: raw-images
+      MINIO_BUCKET_FACES: face-crops
+      MINIO_PRESIGNED_URL_EXPIRY: "3600"
+      MINIO_SECURE: "false"
+      CROP_MARGIN_RATIO: "0.1"
     networks:
       - kafka-net
+      - storage-net
       - db-net
     volumes:
       - ./orchestrator-2:/app
 
-  # ── 7. ORQUESTADOR 3 — Tras detección de edad ─────────────
+  # ── 7. ORQUESTADOR 3 — Agregación de resultados de edad ───
   orchestrator-3:
     build:
       context: ./orchestrator-3
@@ -201,12 +213,20 @@ services:
         condition: service_healthy
       postgres:
         condition: service_healthy
+      minio:
+        condition: service_healthy
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       POSTGRES_URL: postgresql://${POSTGRES_USER:-faceuser}:${POSTGRES_PASSWORD:-facepass}@postgres:5432/${POSTGRES_DB:-facedb}
       KAFKA_DLQ_TOPIC: dead.letter.queue
+      MINIO_ENDPOINT: minio:9000
+      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_PRESIGNED_URL_EXPIRY: "3600"
+      MINIO_SECURE: "false"
     networks:
       - kafka-net
+      - storage-net
       - db-net
     volumes:
       - ./orchestrator-4:/app
@@ -239,8 +259,8 @@ services:
     volumes:
       - ./face-detection:/app
 
-  # ── 10/11/12. AGE DETECTION x3 (DE) ──────────────────────
-  # Las 3 instancias comparten el mismo consumer group.
+  # ── 10. AGE DETECTION (DE) ────────────────────────────────
+  # Las instancias comparten el mismo consumer group.
   # Kafka distribuye los mensajes entre ellas automáticamente.
   age-detection:
     build:
@@ -271,7 +291,7 @@ services:
       - ./age-detection:/app
       - ./age-detection/model:/app/model
 
-  # ── 13. PIXELATION (Pixp) ─────────────────────────────────
+  # ── 11. PIXELATION ────────────────────────────────────────
   pixelation:
     build:
       context: ./pixelation
@@ -299,37 +319,3 @@ services:
       - storage-net
     volumes:
       - ./pixelation:/app
-
-  # ── 14. STORAGE SERVICE ───────────────────────────────────
-  storage-service:
-    build:
-      context: ./storage-service
-      dockerfile: Dockerfile
-    container_name: storage-service
-    restart: unless-stopped
-    depends_on:
-      kafka:
-        condition: service_healthy
-      postgres:
-        condition: service_healthy
-      minio:
-        condition: service_healthy
-    environment:
-      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
-      KAFKA_GROUP_ID: storage-group
-      KAFKA_CONSUME_TOPIC: cmd.storage
-      KAFKA_PRODUCE_TOPIC: evt.storage.completed
-      KAFKA_DLQ_TOPIC: dead.letter.queue
-      MINIO_ENDPOINT: minio:9000
-      MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
-      MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
-      MINIO_BUCKET_PROCESSED: processed-images
-      MINIO_SECURE: "false"
-      MINIO_PRESIGNED_URL_EXPIRY: "3600"
-      POSTGRES_URL: postgresql://${POSTGRES_USER:-faceuser}:${POSTGRES_PASSWORD:-facepass}@postgres:5432/${POSTGRES_DB:-facedb}
-    networks:
-      - kafka-net
-      - storage-net
-      - db-net
-    volumes:
-      - ./storage-service:/app
