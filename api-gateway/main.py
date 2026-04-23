@@ -7,8 +7,12 @@ from contextlib import asynccontextmanager
 from datetime import datetime, timezone, timedelta
 from io import BytesIO
 
+import pathlib
 import psycopg2
 from fastapi import FastAPI, UploadFile, File, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import FileResponse
 from kafka import KafkaProducer
 from minio import Minio
 
@@ -77,6 +81,13 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(title='API Gateway — Pixelado de Menores', lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 
 def get_db():
@@ -341,3 +352,12 @@ def get_cara(guid: str, num_cara: int):
     if result is None:
         raise HTTPException(status_code=404, detail='Cara no encontrada')
     return result
+
+
+# ── Frontend UI ───────────────────────────────────────────────────────────────
+_FRONTEND = pathlib.Path(__file__).parent / 'frontend'
+if _FRONTEND.exists():
+    @app.get('/', include_in_schema=False)
+    def ui_root():
+        return FileResponse(str(_FRONTEND / 'index.html'))
+    app.mount('/ui', StaticFiles(directory=str(_FRONTEND), html=True), name='ui')

@@ -18,8 +18,8 @@ La comunicación entre servicios es **completamente asíncrona** mediante Kafka.
 | Mensajería | Apache Kafka (KRaft, sin Zookeeper) |
 | Contenedores | Docker + Docker Compose |
 | API | FastAPI (Python) |
-| Face Detection | OpenCV Haar Cascades |
-| Age Detection | DeepFace |
+| Face Detection | YOLOv8 (`yolov8n-face.pt`) |
+| Age Detection | MobileNetV2 (clasificador binario menor/adulto, custom TensorFlow/Keras) |
 | Pixelation | OpenCV |
 | Almacenamiento objetos | MinIO |
 | Base de datos | PostgreSQL |
@@ -112,15 +112,18 @@ La comunicación entre servicios es **completamente asíncrona** mediante Kafka.
 - **Consume:** `cmd.face_detection` (T2)
 - **Produce:** `evt.face_detection.completed` (T3)
 - **Entrada:** imagen cruda en MinIO (`raw-images/{guid}.{ext}`)
-- **Salida:** la misma imagen con las zonas donde hay caras → lista de bounding boxes `[{num_cara, x, y, w, h}]`
-- **Tecnología:** OpenCV Haar Cascades (`haarcascade_frontalface_default.xml`)
+- **Salida:** lista de bounding boxes `[{num_cara, x, y, w, h}]`
+- **Tecnología:** YOLOv8 (`yolov8n-face.pt`, umbral de confianza 0.4)
 
 ### 4. Age Detection Service (DE)
 - **Consume:** `cmd.age_detection` (T4) — un mensaje por cara
 - **Produce:** `evt.age_detection.completed` (T5) — un mensaje por cara
 - **Entrada:** recorte individual de una cara en MinIO (`face-crops/{guid}/cara_{num_cara}.{ext}`)
-- **Salida:** edad estimada y si es menor (`{guid, num_cara, edad, es_menor}`)
-- **Tecnología:** DeepFace (`actions=['age']`, `enforce_detection=False`)
+- **Salida:** clasificación binaria menor/adulto (`{guid, num_cara, edad_estimada, es_menor, confianza_modelo}`)
+- **Tecnología:** MobileNetV2 custom (`age_classifier.keras`) — clasificador binario entrenado con transfer learning
+- **Modelo:** `age-detection/model/age_classifier.keras` (generado por `training/train_age_model.py`)
+- **Clasificación:** `prob >= MINOR_PROB_THRESHOLD` (default 0.5) → menor; devuelve `edad_estimada=12` (menor) o `35` (adulto)
+- **Nota:** `Edad` en BD es un valor representativo de la clase, no una edad real estimada
 
 ### 5. Pixelation Service (Pixel)
 - **Consume:** `cmd.pixelation` (T6)
@@ -180,7 +183,7 @@ La comunicación entre servicios es **completamente asíncrona** mediante Kafka.
                    (si N=0 → publica directamente   → T6: cmd.pixelation con lista vacía)
 
 6.  Age Det.       → descarga face-crops/{guid}/cara_N.ext
-                   → estima edad con DeepFace
+                   → clasifica menor/adulto con MobileNetV2 custom
                    → publica                        → T5: evt.age_detection.completed (uno por cara)
 
 7.  Orquestador 3  → acumula resultados hasta tener todas las caras
@@ -234,7 +237,7 @@ CREATE TABLE IF NOT EXISTS Imagenes (
     y            INT,            -- bounding box: posición y
     w            INT,            -- bounding box: ancho
     h            INT,            -- bounding box: alto
-    Edad         INT,            -- edad estimada por DeepFace
+    Edad         INT,            -- valor representativo de clase: 12 (menor) o 35 (adulto)
     Es_Menor     BOOLEAN,        -- TRUE si edad < 18
     Escore       DECIMAL(5,4),   -- confianza del modelo de estimación de edad
     Estado       VARCHAR(50),
@@ -278,6 +281,7 @@ proyecto_pixelar-menores/
 │   ├── fase4-face-detection-up.bat
 │   ├── fase5-age-detection-up.bat
 │   ├── fase6-pixelation-up.bat
+│   ├── download_model.bat         ← descarga age_classifier.keras desde GitHub Releases
 │   ├── status.bat
 │   ├── logs.bat
 │   ├── down.bat
@@ -312,11 +316,20 @@ proyecto_pixelar-menores/
 │   ├── Dockerfile
 │   ├── main.py
 │   ├── model/
+│   │   └── age_classifier.keras   ← generado por training/
 │   └── requirements.txt
 ├── pixelation/
 │   ├── Dockerfile
 │   ├── main.py
 │   └── requirements.txt
+├── training/
+│   ├── Dockerfile
+│   ├── train_age_model.py         ← entrena el modelo MobileNetV2
+│   └── requirements.txt
+├── reports/
+│   ├── dataset_report.py
+│   ├── dataset_analysis.txt
+│   └── dataset_analysis.json
 └── db/
     └── init.sql
 ```
@@ -328,6 +341,8 @@ proyecto_pixelar-menores/
 - Las imágenes **no viajan dentro de los mensajes Kafka**. Se guardan en MinIO y los eventos transportan solo la referencia (bucket + clave).
 - El **GUID** es el identificador único de cada solicitud. Se usa como clave en los tres buckets de MinIO.
 - Age Detection procesa **una cara a la vez**. Orquestador 2 envía N mensajes a T4, uno por cara recortada.
+- El modelo de clasificación de edad es un **MobileNetV2** entrenado con transfer learning en dos fases (cabeza → fine-tuning). Se entrena con `training/train_age_model.py` y se guarda en `age-detection/model/age_classifier.keras`. El campo `Edad` en BD es un valor representativo (12 = menor, 35 = adulto), no una edad real.
+- El modelo puede obtenerse de dos formas: entrenándolo localmente (`training/`) o descargándolo desde GitHub Releases con `scripts/download_model.bat`. El contenedor `age-detection` no arranca sin él.
 - Orquestador 3 implementa el **patrón de agregación**: acumula resultados de T5 hasta recibir `Num_Imagenes_Total` respuestas antes de publicar en T6.
 - El API Gateway crea los tres buckets de MinIO al arrancar si no existen.
 - Kafka usa modo **KRaft** (sin Zookeeper). Los topics se crean automáticamente.
