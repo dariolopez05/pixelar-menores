@@ -18,21 +18,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger('age-detection')
 
-KAFKA_BOOTSTRAP   = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
-CONSUME_TOPIC     = os.environ.get('KAFKA_CONSUME_TOPIC',     'cmd.age_detection')
-PRODUCE_TOPIC     = os.environ.get('KAFKA_PRODUCE_TOPIC',     'evt.age_detection.completed')
-DLQ_TOPIC         = os.environ.get('KAFKA_DLQ_TOPIC',         'dead.letter.queue')
-GROUP_ID          = os.environ.get('KAFKA_GROUP_ID',          'age-detection-group')
-MINIO_ENDPOINT    = os.environ.get('MINIO_ENDPOINT',          'minio:9000')
-MINIO_ACCESS      = os.environ.get('MINIO_ACCESS_KEY',        'minioadmin')
-MINIO_SECRET      = os.environ.get('MINIO_SECRET_KEY',        'minioadmin')
-MINIO_SECURE      = os.environ.get('MINIO_SECURE',            'false').lower() == 'true'
-MINOR_THRESHOLD   = int(os.environ.get('MINOR_AGE_THRESHOLD', '18'))
-# Umbral de probabilidad para clasificar como menor. Bajarlo aumenta el recall
-# (prefiere pixelar de más a dejar pasar un menor).
+KAFKA_BOOTSTRAP      = os.environ.get('KAFKA_BOOTSTRAP_SERVERS', 'kafka:29092')
+CONSUME_TOPIC        = os.environ.get('KAFKA_CONSUME_TOPIC',     'cmd.age_detection')
+PRODUCE_TOPIC        = os.environ.get('KAFKA_PRODUCE_TOPIC',     'evt.age_detection.completed')
+DLQ_TOPIC            = os.environ.get('KAFKA_DLQ_TOPIC',         'dead.letter.queue')
+GROUP_ID             = os.environ.get('KAFKA_GROUP_ID',          'age-detection-group')
+MINIO_ENDPOINT       = os.environ.get('MINIO_ENDPOINT',          'minio:9000')
+MINIO_ACCESS         = os.environ.get('MINIO_ACCESS_KEY',        'minioadmin')
+MINIO_SECRET         = os.environ.get('MINIO_SECRET_KEY',        'minioadmin')
+MINIO_SECURE         = os.environ.get('MINIO_SECURE',            'false').lower() == 'true'
 MINOR_PROB_THRESHOLD = float(os.environ.get('MINOR_PROB_THRESHOLD', '0.5'))
-MODEL_PATH        = os.environ.get('MODEL_PATH', '/app/model/age_classifier.keras')
-IMG_SIZE          = (200, 200)  # debe coincidir con IMG_SIZE del script de entrenamiento
+MODEL_PATH           = os.environ.get('MODEL_PATH', '/app/model/age_classifier.keras')
+IMG_SIZE             = (200, 200)
 
 
 def load_model():
@@ -78,25 +75,24 @@ def build_consumer():
 
 
 def preprocess(face_img_bgr: np.ndarray) -> np.ndarray:
-    """Convierte BGR→RGB, redimensiona y normaliza igual que en el entrenamiento."""
     img = cv2.cvtColor(face_img_bgr, cv2.COLOR_BGR2RGB)
     img = cv2.resize(img, IMG_SIZE)
-    img = img.astype(np.float32) / 255.0
-    return np.expand_dims(img, axis=0)  # (1, H, W, 3)
+    img = img.astype(np.float32)
+    img = tf.keras.applications.mobilenet_v2.preprocess_input(img)  # [-1, 1] como espera MobileNetV2
+    return np.expand_dims(img, axis=0)
 
 
 def classify_age(model, face_img_bgr: np.ndarray):
     """
     Devuelve (edad_estimada, es_menor, confianza).
-    - prob > MINOR_PROB_THRESHOLD → menor (clase 1)
-    - edad_estimada es un valor representativo de la clase, no una edad real
-    - confianza: qué tan lejos está la probabilidad del umbral (0–1)
+    - edad_estimada: 12 si menor, 35 si adulto (valor representativo)
+    - confianza: qué tan lejos está la probabilidad del umbral (0=inseguro, 1=máxima)
     """
     tensor    = preprocess(face_img_bgr)
     prob      = float(model.predict(tensor, verbose=0)[0][0])
     es_menor  = prob >= MINOR_PROB_THRESHOLD
     edad_estimada = 12 if es_menor else 35
-    confianza     = abs(prob - 0.5) * 2  # 0 = totalmente inseguro, 1 = máxima confianza
+    confianza     = abs(prob - 0.5) * 2
     return edad_estimada, es_menor, round(confianza, 4)
 
 
@@ -122,8 +118,8 @@ def process(msg, model, producer, minio_client):
 
     edad_estimada, es_menor, confianza = classify_age(model, face_img)
 
-    logger.info('[%s] Cara %d: prob_menor=%.3f → %s (confianza=%.3f)',
-                guid, num_cara, confianza, 'MENOR' if es_menor else 'ADULTO', confianza)
+    logger.info('[%s] Cara %d: edad=%d → %s (confianza=%.3f)',
+                guid, num_cara, edad_estimada, 'MENOR' if es_menor else 'ADULTO', confianza)
 
     producer.send(PRODUCE_TOPIC, key=guid, value={
         'guid_solicitud':   guid,
@@ -143,7 +139,7 @@ def process(msg, model, producer, minio_client):
 
 
 def main():
-    logger.info('Iniciando servicio de detección de edad (modelo custom)...')
+    logger.info('Iniciando servicio de detección de edad (MobileNetV2 custom)...')
     model        = load_model()
     producer     = build_producer()
     consumer     = build_consumer()

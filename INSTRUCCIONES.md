@@ -5,7 +5,7 @@
 - [x] API Gateway
 - [x] Orquestadores (x4)
 - [x] Face Detection Service — YOLOv8 (`yolov8n-face.pt` incluido en imagen Docker)
-- [x] Age Detection Service — DeepFace, procesa una cara a la vez
+- [x] Age Detection Service — MobileNetV2 custom (`age_classifier.keras`), procesa una cara a la vez
 - [x] Pixelation Service
 - [ ] Pruebas end-to-end
 - [ ] Entregables
@@ -144,20 +144,43 @@ age-detection/
 ├── Dockerfile
 ├── requirements.txt
 ├── main.py
-└── model/   ← pesos de DeepFace se descargan aquí
+└── model/
+    └── age_classifier.keras   ← obligatorio, no incluido en el repo
+training/
+├── Dockerfile
+├── requirements.txt
+└── train_age_model.py
 ```
 
 ### Paso 5.2 — Implementación
 - **1 solo contenedor**, procesa **una cara a la vez** (mensaje por cara)
 - Consume `cmd.age_detection` (N mensajes por imagen, uno por cara recortada)
 - Descarga el recorte de MinIO (`face-crops/{guid}/cara_N.{ext}`)
-- Pasa el recorte por **DeepFace** (`actions=['age']`, `enforce_detection=False`)
-- Clasifica como menor si `edad < 18`
-- Publica `evt.age_detection.completed` con `{guid, num_cara, id_imagen, edad, es_menor, escore}` por cara
+- Clasifica con **MobileNetV2 custom** (`age_classifier.keras`): `prob >= 0.5` → menor
+- Devuelve `edad_estimada=12` (menor) o `35` (adulto) — valor representativo, no edad real
+- Publica `evt.age_detection.completed` con `{guid, num_cara, id_imagen, edad_estimada, es_menor, confianza_modelo}` por cara
 
-> La primera build descarga los pesos del modelo (~500 MB). Puede tardar varios minutos.
+### Paso 5.3 — Obtener el modelo (obligatorio antes de levantar el servicio)
 
-### Paso 5.3 — Levantar y probar
+**Opción A — Descargar desde GitHub Releases** (recomendado si ya está publicado):
+```bat
+scripts\download_model.bat
+```
+
+**Opción B — Entrenar localmente** (necesario la primera vez o si cambias el dataset):
+```bat
+docker build -t age-training ./training
+docker run --rm -v "%cd%\dataset:/dataset" -v "%cd%\age-detection\model:/model" age-training
+```
+Con GPU NVIDIA (mucho más rápido):
+```bat
+docker run --rm --gpus all -v "%cd%\dataset:/dataset" -v "%cd%\age-detection\model:/model" age-training
+```
+
+> El dataset debe estar en `dataset/` con carpetas nombradas por edad (p.ej. `017/`).
+> El modelo se guarda automáticamente en `age-detection/model/age_classifier.keras`.
+
+### Paso 5.4 — Levantar el servicio
 ```bash
 docker compose up -d --build age-detection
 ```

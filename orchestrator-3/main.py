@@ -64,7 +64,7 @@ def main():
             id_solicitud    = msg['id_solicitud']
             num_cara        = msg['num_cara']
             id_imagen       = msg['id_imagen']
-            edad            = msg['edad_estimada']
+            edad_estimada   = msg.get('edad_estimada')
             es_menor        = msg['es_menor']
             escore          = msg.get('confianza_modelo', 0.0)
             num_total_caras = msg['num_total_caras']
@@ -82,7 +82,8 @@ def main():
                         """UPDATE Imagenes
                            SET Edad = %s, Es_Menor = %s, Escore = %s, Estado = 'PROCESSED'
                            WHERE Id_Imagen = %s""",
-                        (int(round(edad)), es_menor, round(escore, 4), id_imagen),
+                        (round(edad_estimada) if edad_estimada is not None else None,
+                         es_menor, round(escore, 4), id_imagen),
                     )
                 conn.commit()
             finally:
@@ -115,7 +116,8 @@ def main():
             })
 
             recibidos = len(pendientes[id_solicitud]['resultados'])
-            logger.info(f'[{guid}] Cara {num_cara}: {edad:.1f} años → {"MENOR" if es_menor else "ADULTO"} ({recibidos}/{num_total_caras})')
+            edad_str = f"{edad_estimada:.1f} años" if edad_estimada is not None else "?"
+            logger.info(f'[{guid}] Cara {num_cara}: {edad_str} → {"MENOR" if es_menor else "ADULTO"} (escore={escore:.3f}) ({recibidos}/{num_total_caras})')
 
             if recibidos < num_total_caras:
                 continue

@@ -22,7 +22,6 @@ from sklearn.metrics import (
     roc_auc_score,
 )
 from sklearn.model_selection import train_test_split
-from sklearn.utils.class_weight import compute_class_weight
 
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"
 import tensorflow as tf
@@ -40,18 +39,15 @@ OUTPUT_DIR  = Path(os.environ.get("OUTPUT_DIR",  str(_default_output)))
 REPORTS_DIR = Path(os.environ.get("REPORTS_DIR", str(_default_reports)))
 MODEL_PATH  = OUTPUT_DIR / "age_classifier.keras"
 
-# Imágenes reales son 200×200 — usamos la resolución nativa para no perder información.
-# MobileNetV2 acepta cualquier tamaño >= 32.
 IMG_SIZE         = (200, 200)
 BATCH_SIZE       = 32
-EPOCHS_HEAD      = 20       # fase 1: solo la cabeza (base congelada)
-EPOCHS_FINETUNE  = 15       # fase 2: descongelar últimas capas
+EPOCHS_HEAD      = 20
+EPOCHS_FINETUNE  = 15
 LR_HEAD          = 1e-3
 LR_FINETUNE      = 1e-5
-MINOR_THRESHOLD  = 18       # edad < 18 → menor (clase 1)
+MINOR_THRESHOLD  = 18
 VAL_SPLIT        = 0.2
 SEED             = 42
-# Edad 1 tiene 1112 imgs (28% de todos los menores). Se limita para evitar sesgo.
 MAX_IMGS_PER_AGE = 250
 
 logging.basicConfig(
@@ -77,11 +73,10 @@ def load_paths_and_labels(dataset_dir: Path):
         if not folder_name:
             folder_name = "0"
         age = int(folder_name)
-        label = 1 if age < MINOR_THRESHOLD else 0  # 1=menor, 0=adulto
+        label = 1 if age < MINOR_THRESHOLD else 0
 
         age_imgs = list(age_dir.glob("*.png"))
 
-        # Limitar edades con demasiadas imágenes para evitar sesgo
         if len(age_imgs) > MAX_IMGS_PER_AGE:
             indices  = rng.choice(len(age_imgs), MAX_IMGS_PER_AGE, replace=False)
             age_imgs = [age_imgs[i] for i in indices]
@@ -104,11 +99,10 @@ def load_paths_and_labels(dataset_dir: Path):
 
 
 def load_and_preprocess(path: str):
-    """Lee una imagen PNG, la redimensiona y normaliza a [0, 1]."""
     img = tf.io.read_file(path)
     img = tf.image.decode_png(img, channels=3)
     img = tf.image.resize(img, IMG_SIZE)
-    img = tf.cast(img, tf.float32) / 255.0
+    img = tf.keras.applications.mobilenet_v2.preprocess_input(img)  # [-1, 1] como espera MobileNetV2
     return img
 
 
@@ -160,7 +154,7 @@ def build_model(trainable_base=False):
 
 # ── Métricas y gráficos ───────────────────────────────────────────────────────
 
-def evaluate_model(model, val_ds, val_paths, val_labels):
+def evaluate_model(model, val_ds, val_labels):
     preds_prob = model.predict(val_ds, verbose=0).ravel()
     preds_bin  = (preds_prob >= 0.5).astype(int)
 
@@ -180,9 +174,9 @@ def evaluate_model(model, val_ds, val_paths, val_labels):
     log.info("Matriz de confusión:\n%s", cm)
 
     return {
-        "auc_roc":           round(float(auc), 4),
-        "classification":    report_dict,
-        "confusion_matrix":  cm.tolist(),
+        "auc_roc":          round(float(auc), 4),
+        "classification":   report_dict,
+        "confusion_matrix": cm.tolist(),
     }
 
 
@@ -222,10 +216,8 @@ def main():
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
-    # 1. Cargar rutas y etiquetas
     all_paths, all_labels = load_paths_and_labels(DATASET_DIR)
 
-    # 2. Split estratificado
     train_paths, val_paths, train_labels, val_labels = train_test_split(
         all_paths, all_labels,
         test_size=VAL_SPLIT,
@@ -234,20 +226,13 @@ def main():
     )
     log.info("Train: %d | Val: %d", len(train_paths), len(val_paths))
 
-    # 3. Class weights (corrige el desbalance menores/adultos)
-    class_weights_arr = compute_class_weight(
-        class_weight="balanced",
-        classes=np.unique(train_labels),
-        y=train_labels,
-    )
-    class_weights = dict(enumerate(class_weights_arr))
+    class_weights = {0: 1.0, 1: 1.0}
     log.info("Class weights: %s", class_weights)
 
-    # 4. Datasets tf.data
     train_ds = make_dataset(train_paths, train_labels, augment_data=True, shuffle=True)
     val_ds   = make_dataset(val_paths,   val_labels,   augment_data=False, shuffle=False)
 
-    # 5. ── FASE 1: entrenar solo la cabeza (base congelada) ──────────────────
+    # ── FASE 1: entrenar solo la cabeza ──────────────────────────────────────
     log.info("=" * 60)
     log.info("FASE 1 — Entrenamiento de la cabeza (%d epochs)", EPOCHS_HEAD)
     log.info("=" * 60)
@@ -267,7 +252,7 @@ def main():
 
     cb_head = [
         callbacks.EarlyStopping(
-            monitor="val_recall", mode="max",
+            monitor="val_auc", mode="max",
             patience=5, restore_best_weights=True, verbose=1,
         ),
         callbacks.ReduceLROnPlateau(
@@ -284,12 +269,12 @@ def main():
         verbose=1,
     )
 
-    # 6. ── FASE 2: fine-tuning (descongelar últimas 40 capas de MobileNetV2) ─
+    # ── FASE 2: fine-tuning ──────────────────────────────────────────────────
     log.info("=" * 60)
     log.info("FASE 2 — Fine-tuning (%d epochs)", EPOCHS_FINETUNE)
     log.info("=" * 60)
 
-    base_model = model.layers[1]  # MobileNetV2
+    base_model = model.layers[1]
     base_model.trainable = True
     for layer in base_model.layers[:-40]:
         layer.trainable = False
@@ -329,22 +314,19 @@ def main():
         verbose=1,
     )
 
-    # 7. Guardar modelo final (si ModelCheckpoint no lo guardó en early stop)
     if not MODEL_PATH.exists():
         model.save(MODEL_PATH)
         log.info("Modelo guardado en %s", MODEL_PATH)
     else:
-        log.info("Mejor modelo ya guardado por ModelCheckpoint en %s", MODEL_PATH)
+        log.info("Mejor modelo guardado por ModelCheckpoint en %s", MODEL_PATH)
 
-    # 8. Evaluación final
     log.info("=" * 60)
     log.info("EVALUACIÓN FINAL")
     log.info("=" * 60)
 
     best_model = tf.keras.models.load_model(MODEL_PATH)
-    metrics = evaluate_model(best_model, val_ds, val_paths, val_labels)
+    metrics = evaluate_model(best_model, val_ds, val_labels)
 
-    # 9. Guardar reporte y curvas
     from datetime import datetime
     report = {
         "generated_at":      datetime.now().isoformat(),
@@ -360,10 +342,9 @@ def main():
         **metrics,
     }
 
-    # Guardar en ambas rutas: junto al modelo Y en reports/training/
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     report_json = json.dumps(report, indent=2)
-    (OUTPUT_DIR / "training_report.json").write_text(report_json)
+    (OUTPUT_DIR  / "training_report.json").write_text(report_json)
     (REPORTS_DIR / "training_report.json").write_text(report_json)
     log.info("Reporte guardado en %s", REPORTS_DIR / "training_report.json")
 
