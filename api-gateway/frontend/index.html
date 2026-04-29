@@ -3,629 +3,519 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>PIXELAR MENORES — Centro de Control</title>
+  <title>PixelarMenores — Protección de privacidad</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
-  <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg:          #05080f;
-      --surface:     #0b1120;
-      --surface2:    #101828;
-      --border:      rgba(0, 180, 216, 0.14);
-      --border-hi:   rgba(0, 180, 216, 0.45);
-      --cyan:        #00b4d8;
-      --cyan-glow:   rgba(0, 180, 216, 0.25);
-      --amber:       #f59e0b;
-      --red:         #f43f5e;
-      --green:       #10b981;
-      --text:        #7fa8c9;
-      --text-bright: #d0e8f8;
-      --text-dim:    #2e4a66;
-      --ui:          'Rajdhani', sans-serif;
-      --mono:        'JetBrains Mono', monospace;
-      --r:           6px;
+      --bg:          #080C16;
+      --surface:     #0E1523;
+      --surface2:    #141C2E;
+      --surface3:    #1B2540;
+      --border:      rgba(99,102,241,0.12);
+      --border-hi:   rgba(99,102,241,0.35);
+      --accent:      #6366F1;
+      --accent-dim:  rgba(99,102,241,0.14);
+      --accent-glow: rgba(99,102,241,0.28);
+      --green:       #10B981;
+      --green-dim:   rgba(16,185,129,0.12);
+      --red:         #F43F5E;
+      --red-dim:     rgba(244,63,94,0.12);
+      --amber:       #F59E0B;
+      --amber-dim:   rgba(245,158,11,0.12);
+      --text:        #E2E8F0;
+      --text-muted:  #94A3B8;
+      --text-dim:    #334155;
+      --font:        'Inter', -apple-system, sans-serif;
+      --r:           10px;
+      --r-sm:        6px;
     }
 
-    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--ui); }
+    html, body { height: 100%; background: var(--bg); color: var(--text); font-family: var(--font); font-size: 14px; line-height: 1.5; }
 
-    /* ── dot-grid bg ── */
     body::before {
       content: '';
       position: fixed; inset: 0; pointer-events: none; z-index: 0;
-      background-image: radial-gradient(circle, rgba(0,180,216,0.07) 1px, transparent 1px);
-      background-size: 28px 28px;
+      background:
+        radial-gradient(ellipse 60% 50% at 15% 0%, rgba(99,102,241,0.07) 0%, transparent 70%),
+        radial-gradient(ellipse 40% 40% at 85% 100%, rgba(16,185,129,0.04) 0%, transparent 70%);
     }
 
     body { display: flex; flex-direction: column; min-height: 100vh; position: relative; z-index: 1; }
 
-    /* ─────────────── HEADER ─────────────── */
+    /* ─── HEADER ─── */
     header {
-      padding: 0 24px;
-      height: 64px;
-      display: flex;
-      align-items: center;
-      gap: 32px;
+      height: 58px; padding: 0 20px;
+      display: flex; align-items: center; gap: 20px;
       border-bottom: 1px solid var(--border);
-      background: rgba(11,17,32,0.9);
-      backdrop-filter: blur(8px);
-      position: sticky; top: 0; z-index: 100;
-      flex-shrink: 0;
+      background: rgba(14,21,35,0.88);
+      backdrop-filter: blur(14px);
+      position: sticky; top: 0; z-index: 100; flex-shrink: 0;
     }
 
-    .logo {
-      font-size: 18px; font-weight: 700; letter-spacing: 3px;
-      color: var(--cyan); white-space: nowrap;
-      text-shadow: 0 0 16px var(--cyan-glow);
+    .logo { display: flex; align-items: center; gap: 9px; flex-shrink: 0; }
+    .logo-icon {
+      width: 30px; height: 30px;
+      background: linear-gradient(135deg, var(--accent) 0%, #818CF8 100%);
+      border-radius: 8px;
+      display: flex; align-items: center; justify-content: center;
     }
-    .logo span { color: var(--text-dim); font-weight: 400; }
+    .logo-icon svg { width: 16px; height: 16px; color: #fff; }
+    .logo-text { font-size: 14px; font-weight: 700; color: var(--text); letter-spacing: -0.3px; }
+    .logo-text em { color: var(--accent); font-style: normal; }
 
-    /* ── pipeline ── */
     .pipeline {
-      flex: 1;
-      display: flex;
-      align-items: center;
-      gap: 0;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 1px;
-      text-transform: uppercase;
-      font-family: var(--mono);
+      flex: 1; display: flex; align-items: center; justify-content: center;
     }
-
     .step {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      color: var(--text-dim);
-      transition: color 0.4s;
-      white-space: nowrap;
+      display: flex; align-items: center; gap: 5px;
+      color: var(--text-dim); font-size: 11px; font-weight: 500;
+      white-space: nowrap; transition: color 0.3s;
     }
     .step-dot {
-      width: 10px; height: 10px; border-radius: 50%;
-      border: 2px solid currentColor;
-      background: transparent;
-      transition: background 0.4s, box-shadow 0.4s;
-      flex-shrink: 0;
+      width: 7px; height: 7px; border-radius: 50%;
+      border: 2px solid currentColor; flex-shrink: 0;
+      transition: all 0.3s;
     }
-    .step-line {
-      flex: 1; height: 1px;
-      background: var(--border);
-      min-width: 20px; max-width: 60px;
-      transition: background 0.4s;
-    }
-    .step.done { color: var(--cyan); }
-    .step.done .step-dot { background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
-    .step.done + .step-line { background: var(--cyan); }
+    .step-line { width: 24px; height: 1px; background: var(--border); margin: 0 5px; transition: background 0.3s; }
+    .step.done { color: var(--accent); }
+    .step.done .step-dot { background: var(--accent); border-color: var(--accent); box-shadow: 0 0 7px var(--accent-glow); }
+    .step.done + .step-line { background: var(--accent); opacity: 0.4; }
     .step.active { color: var(--amber); }
-    .step.active .step-dot {
-      background: var(--amber);
-      box-shadow: 0 0 12px var(--amber);
-      animation: pulse-dot 1.4s ease-in-out infinite;
-    }
-    @keyframes pulse-dot {
-      0%,100% { box-shadow: 0 0 8px var(--amber); }
-      50%      { box-shadow: 0 0 20px var(--amber), 0 0 40px rgba(245,158,11,0.3); }
-    }
+    .step.active .step-dot { background: var(--amber); border-color: var(--amber); animation: dot-pulse 1.4s ease-in-out infinite; }
     .step.error { color: var(--red); }
-    .step.error .step-dot { background: var(--red); box-shadow: 0 0 10px var(--red); }
+    .step.error .step-dot { background: var(--red); border-color: var(--red); }
+
+    @keyframes dot-pulse {
+      0%,100% { box-shadow: 0 0 5px rgba(245,158,11,0.4); }
+      50%      { box-shadow: 0 0 14px rgba(245,158,11,0.7); }
+    }
 
     .status-badge {
-      padding: 4px 12px;
-      border-radius: 20px;
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 1.5px;
-      text-transform: uppercase;
-      font-family: var(--mono);
-      border: 1px solid var(--border);
-      color: var(--text-dim);
-      white-space: nowrap;
+      display: flex; align-items: center; gap: 6px;
+      padding: 4px 12px; border-radius: 20px;
+      font-size: 11px; font-weight: 600;
+      border: 1px solid var(--border); color: var(--text-muted);
+      white-space: nowrap; flex-shrink: 0;
     }
-    .status-badge.pending  { border-color: var(--amber); color: var(--amber); }
-    .status-badge.active   { border-color: var(--cyan); color: var(--cyan); background: var(--cyan-glow); }
-    .status-badge.completed{ border-color: var(--green); color: var(--green); }
-    .status-badge.error    { border-color: var(--red); color: var(--red); }
+    .badge-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--text-dim); }
+    .status-badge.pending  { border-color: rgba(245,158,11,0.3); color: var(--amber); }
+    .status-badge.pending .badge-dot  { background: var(--amber); animation: blink 1.4s infinite; }
+    .status-badge.active   { border-color: rgba(99,102,241,0.35); color: var(--accent); }
+    .status-badge.active .badge-dot   { background: var(--accent); animation: blink 1.4s infinite; }
+    .status-badge.completed { border-color: rgba(16,185,129,0.4); color: var(--green); }
+    .status-badge.completed .badge-dot { background: var(--green); }
+    .status-badge.error     { border-color: rgba(244,63,94,0.3); color: var(--red); }
+    .status-badge.error .badge-dot    { background: var(--red); }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.35} }
 
-    /* ─────────────── MAIN GRID ─────────────── */
+    /* ─── MAIN ─── */
     main {
-      flex: 1;
-      display: grid;
-      grid-template-columns: 1fr 360px;
-      gap: 16px;
-      padding: 16px;
+      flex: 1; display: grid;
+      grid-template-columns: 1fr 336px;
+      gap: 10px; padding: 10px;
       min-height: 0;
     }
 
-    /* ─────────────── PANELS ─────────────── */
     .panel {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--r);
-      position: relative;
       overflow: hidden;
+      display: flex; flex-direction: column;
+      min-height: 0;
     }
-    .panel::before, .panel::after {
-      content: '';
-      position: absolute;
-      width: 12px; height: 12px;
-      border-color: var(--border-hi);
-      border-style: solid;
-    }
-    .panel::before { top: -1px; left: -1px; border-width: 2px 0 0 2px; border-radius: 6px 0 0 0; }
-    .panel::after  { bottom: -1px; right: -1px; border-width: 0 2px 2px 0; border-radius: 0 0 6px 0; }
 
     .panel-header {
-      padding: 10px 16px;
+      padding: 11px 16px;
       border-bottom: 1px solid var(--border);
-      font-size: 11px;
-      font-weight: 600;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--text-dim);
-      font-family: var(--mono);
-      display: flex;
-      align-items: center;
-      gap: 8px;
+      display: flex; align-items: center; gap: 8px;
+      flex-shrink: 0;
     }
-    .panel-header .dot {
-      width: 6px; height: 6px; border-radius: 50%;
-      background: var(--cyan);
-      box-shadow: 0 0 6px var(--cyan);
-    }
+    .panel-header-icon { width: 18px; height: 18px; color: var(--accent); flex-shrink: 0; }
+    .panel-header-title { font-size: 12px; font-weight: 600; color: var(--text); }
+    .panel-header-meta  { font-size: 11px; color: var(--text-muted); margin-left: auto; max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
-    /* ─────────────── IMAGE PANEL ─────────────── */
-    .image-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-    }
-
-    /* upload zone */
+    /* ─── IMAGE PANEL ─── */
+    /* Upload zone */
     .upload-zone {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      gap: 16px;
-      cursor: pointer;
-      border: 2px dashed rgba(0,180,216,0.2);
-      border-radius: var(--r);
-      margin: 16px;
-      padding: 48px 32px;
-      transition: border-color 0.2s, background 0.2s;
-      position: relative;
-      overflow: hidden;
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center; gap: 18px;
+      cursor: pointer; text-align: center;
+      border: 2px dashed rgba(99,102,241,0.2);
+      border-radius: var(--r-sm); margin: 12px; padding: 40px 32px;
+      transition: all 0.2s;
     }
     .upload-zone:hover, .upload-zone.drag-over {
-      border-color: var(--cyan);
-      background: rgba(0,180,216,0.04);
+      border-color: var(--accent); background: var(--accent-dim);
     }
-    .upload-zone .icon {
-      font-size: 48px;
-      opacity: 0.35;
-      line-height: 1;
+    .upload-icon {
+      width: 68px; height: 68px; border-radius: 50%;
+      background: var(--accent-dim);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--accent);
     }
-    .upload-zone h2 {
-      font-size: 20px;
-      font-weight: 600;
-      letter-spacing: 2px;
-      color: var(--text-bright);
-    }
-    .upload-zone p {
-      font-size: 13px;
-      color: var(--text-dim);
-      letter-spacing: 0.5px;
-    }
+    .upload-icon svg { width: 34px; height: 34px; }
+    .upload-title { font-size: 18px; font-weight: 600; color: var(--text); }
+    .upload-sub { font-size: 13px; color: var(--text-muted); line-height: 1.7; }
     .upload-btn {
-      padding: 9px 24px;
-      background: transparent;
-      border: 1px solid var(--cyan);
-      border-radius: 4px;
-      color: var(--cyan);
-      font-family: var(--ui);
-      font-size: 13px;
-      font-weight: 600;
-      letter-spacing: 2px;
-      cursor: pointer;
-      text-transform: uppercase;
-      transition: background 0.2s, box-shadow 0.2s;
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 10px 22px; background: var(--accent);
+      border: none; border-radius: var(--r-sm);
+      color: #fff; font-family: var(--font);
+      font-size: 13px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s; text-decoration: none;
     }
-    .upload-btn:hover {
-      background: var(--cyan-glow);
-      box-shadow: 0 0 16px var(--cyan-glow);
+    .upload-btn:hover { background: #818CF8; box-shadow: 0 4px 18px var(--accent-glow); transform: translateY(-1px); }
+    .upload-btn svg { width: 15px; height: 15px; }
+    .upload-btn.secondary {
+      background: var(--surface3); color: var(--text-muted);
+      font-size: 12px; padding: 8px 16px;
     }
+    .upload-btn.secondary:hover { background: var(--surface2); box-shadow: none; transform: none; color: var(--text); }
     #file-input { display: none; }
 
-    /* viewport: image + canvas overlay */
+    /* Image viewport — fills entire panel height */
     .image-viewport {
-      display: none;
-      flex-direction: column;
-      flex: 1;
-      padding: 16px;
-      gap: 16px;
+      display: none; flex: 1; flex-direction: column; min-height: 0;
     }
     .image-viewport.visible { display: flex; }
 
+    .image-frame {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      overflow: hidden; min-height: 0; background: #04080F;
+      padding: 10px; position: relative;
+    }
     .image-wrap {
-      position: relative;
-      display: inline-block;
-      align-self: flex-start;
-      max-width: 100%;
+      position: relative; max-width: 100%; max-height: 100%;
     }
     #preview-img {
-      display: block;
-      max-width: 100%;
-      max-height: 360px;
+      display: block; max-width: 100%; max-height: 100%;
       border-radius: 4px;
-      border: 1px solid var(--border);
     }
     #bbox-canvas {
-      position: absolute;
-      top: 0; left: 0;
-      pointer-events: none;
-      border-radius: 4px;
+      position: absolute; top: 0; left: 0;
+      pointer-events: none; border-radius: 4px;
     }
 
-    .image-label {
-      font-size: 10px;
-      font-weight: 600;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      color: var(--text-dim);
-      font-family: var(--mono);
-      margin-bottom: 6px;
-    }
-
-    .result-section { display: none; }
-    .result-section.visible { display: block; }
-
-    #result-img {
-      display: block;
-      max-width: 100%;
-      max-height: 360px;
-      border-radius: 4px;
-      border: 1px solid var(--green);
-      box-shadow: 0 0 20px rgba(16,185,129,0.15);
-    }
-
-    /* ─────────────── SIDE PANEL ─────────────── */
-    .side-panel {
-      display: flex;
-      flex-direction: column;
-      gap: 0;
-      overflow: hidden;
-    }
-
-    /* faces list */
-    .faces-list {
-      flex: 1;
-      overflow-y: auto;
-      padding: 12px;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-    }
-    .faces-list::-webkit-scrollbar { width: 4px; }
-    .faces-list::-webkit-scrollbar-track { background: transparent; }
-    .faces-list::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-    .face-card {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-      padding: 8px 10px;
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      background: var(--surface2);
-      transition: border-color 0.3s;
-      animation: fade-in 0.3s ease;
-    }
-    @keyframes fade-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
-
-    .face-card.minor  { border-color: rgba(244,63,94,0.4); }
-    .face-card.adult  { border-color: rgba(16,185,129,0.3); }
-    .face-card.pending-face { border-color: rgba(245,158,11,0.3); }
-
-    .face-thumb {
-      width: 44px; height: 44px;
-      border-radius: 3px;
-      object-fit: cover;
-      flex-shrink: 0;
-      background: var(--surface);
-      border: 1px solid var(--border);
-    }
-    .face-thumb-placeholder {
-      width: 44px; height: 44px;
-      border-radius: 3px;
-      background: var(--surface);
-      border: 1px dashed var(--border);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 18px;
-      flex-shrink: 0;
-      color: var(--text-dim);
-    }
-
-    .face-info { flex: 1; min-width: 0; }
-    .face-num {
-      font-size: 11px; font-weight: 600;
-      letter-spacing: 1px; color: var(--text-dim);
-      font-family: var(--mono); text-transform: uppercase;
-    }
-    .face-verdict {
-      font-size: 14px; font-weight: 700;
-      letter-spacing: 1px; margin-top: 1px;
-    }
-    .face-verdict.minor  { color: var(--red); }
-    .face-verdict.adult  { color: var(--green); }
-    .face-verdict.pending-face { color: var(--amber); }
-    .face-conf {
-      font-size: 10px; color: var(--text-dim);
-      font-family: var(--mono); margin-top: 2px;
-    }
-
-    .face-badge {
-      width: 22px; height: 22px;
-      border-radius: 50%;
-      display: flex; align-items: center; justify-content: center;
-      font-size: 12px; flex-shrink: 0;
-    }
-    .face-badge.minor  { background: rgba(244,63,94,0.15); }
-    .face-badge.adult  { background: rgba(16,185,129,0.12); }
-    .face-badge.pending-face { background: rgba(245,158,11,0.12); }
-
-    /* empty state */
-    .faces-empty {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100%;
-      gap: 8px;
-      color: var(--text-dim);
-      font-size: 13px;
-      text-align: center;
-      padding: 32px;
-    }
-    .faces-empty .big-icon { font-size: 36px; opacity: 0.3; }
-
-    /* metrics */
-    .metrics-section {
+    .image-status-bar {
+      padding: 9px 16px; background: var(--surface);
       border-top: 1px solid var(--border);
-      padding: 12px;
+      display: flex; align-items: center; gap: 8px;
+      font-size: 11px; color: var(--text-muted); flex-shrink: 0;
     }
-    .metrics-title {
-      font-size: 10px; font-weight: 600; letter-spacing: 2px;
-      text-transform: uppercase; color: var(--text-dim);
-      font-family: var(--mono); margin-bottom: 10px;
-    }
-    .metric-row {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      margin-bottom: 6px;
-    }
-    .metric-label {
-      font-size: 11px; color: var(--text-dim);
-      font-family: var(--mono); width: 130px; flex-shrink: 0;
-    }
-    .metric-bar-wrap {
-      flex: 1;
-      height: 3px;
-      background: var(--surface2);
-      border-radius: 2px;
-      overflow: hidden;
-    }
-    .metric-bar {
-      height: 100%;
-      border-radius: 2px;
-      background: var(--cyan);
-      width: 0%;
-      transition: width 0.8s ease;
-    }
-    .metric-val {
-      font-size: 11px; font-family: var(--mono);
-      color: var(--text-bright); width: 52px;
-      text-align: right; flex-shrink: 0;
-    }
-
-    .summary-row {
-      display: flex;
-      gap: 10px;
-      margin-bottom: 10px;
-    }
-    .summary-chip {
-      flex: 1;
-      padding: 8px;
-      border-radius: 4px;
-      border: 1px solid var(--border);
-      background: var(--surface2);
-      text-align: center;
-    }
-    .summary-chip .num {
-      font-size: 22px; font-weight: 700;
-      font-family: var(--mono); display: block;
-    }
-    .summary-chip .lbl {
-      font-size: 10px; letter-spacing: 1px;
-      text-transform: uppercase; color: var(--text-dim);
-    }
-    .summary-chip.minor .num { color: var(--red); }
-    .summary-chip.adult .num { color: var(--green); }
-    .summary-chip.total .num { color: var(--cyan); }
-
-    /* ─────────────── LOG TERMINAL ─────────────── */
-    .log-terminal {
-      border-top: 1px solid var(--border);
-      background: rgba(5,8,15,0.8);
-      flex-shrink: 0;
-    }
-    .log-header {
-      padding: 6px 16px;
-      display: flex;
-      align-items: center;
-      gap: 8px;
-      border-bottom: 1px solid var(--border);
-    }
-    .log-header-title {
-      font-size: 10px; font-weight: 600;
-      letter-spacing: 2px; text-transform: uppercase;
-      color: var(--text-dim); font-family: var(--mono);
-      flex: 1;
-    }
-    .log-clear {
-      font-size: 10px; font-family: var(--mono);
-      color: var(--text-dim); background: none;
-      border: none; cursor: pointer; letter-spacing: 1px;
-      text-transform: uppercase;
-    }
-    .log-clear:hover { color: var(--text); }
-    .log-entries {
-      height: 140px;
-      overflow-y: auto;
-      padding: 6px 16px;
-      font-family: var(--mono);
-      font-size: 11.5px;
-    }
-    .log-entries::-webkit-scrollbar { width: 4px; }
-    .log-entries::-webkit-scrollbar-track { background: transparent; }
-    .log-entries::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
-
-    .log-line {
-      display: flex;
-      gap: 10px;
-      padding: 2px 0;
-      line-height: 1.6;
-      animation: fade-in 0.15s ease;
-    }
-    .log-ts   { color: var(--text-dim); flex-shrink: 0; }
-    .log-tag  { font-weight: 500; flex-shrink: 0; }
-    .log-msg  { color: var(--text); }
-    .log-line.info   .log-tag { color: var(--cyan); }
-    .log-line.warn   .log-tag { color: var(--amber); }
-    .log-line.error  .log-tag { color: var(--red); }
-    .log-line.success .log-tag { color: var(--green); }
-
-    /* ─────────────── LOADING SPINNER ─────────────── */
     .spinner {
-      display: inline-block;
-      width: 14px; height: 14px;
-      border: 2px solid var(--border);
-      border-top-color: var(--cyan);
-      border-radius: 50%;
-      animation: spin 0.7s linear infinite;
-      vertical-align: middle;
+      width: 12px; height: 12px; flex-shrink: 0;
+      border: 2px solid var(--border); border-top-color: var(--accent);
+      border-radius: 50%; animation: spin 0.75s linear infinite;
     }
     @keyframes spin { to { transform: rotate(360deg); } }
 
-    /* utility */
+    /* Result frame */
+    .result-frame {
+      display: none; flex: 1; flex-direction: column; min-height: 0;
+    }
+    .result-frame.visible { display: flex; }
+
+    .result-image-wrap {
+      flex: 1; display: flex; align-items: center; justify-content: center;
+      overflow: hidden; min-height: 0; background: #04080F; padding: 10px;
+    }
+    #result-img {
+      display: block; max-width: 100%; max-height: 100%;
+      border-radius: 4px;
+    }
+
+    .result-actions {
+      padding: 11px 16px; background: var(--surface);
+      border-top: 1px solid var(--border);
+      display: flex; align-items: center; gap: 10px; flex-shrink: 0;
+    }
+    .result-label {
+      display: flex; align-items: center; gap: 6px;
+      font-size: 12px; font-weight: 500; color: var(--green); flex: 1;
+    }
+    .result-label svg { width: 14px; height: 14px; flex-shrink: 0; }
+    .download-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      padding: 8px 18px; background: var(--green);
+      border: none; border-radius: var(--r-sm);
+      color: #fff; font-family: var(--font);
+      font-size: 12px; font-weight: 600; cursor: pointer;
+      transition: all 0.2s; text-decoration: none;
+    }
+    .download-btn:hover { background: #0EA571; box-shadow: 0 4px 14px var(--green-dim); transform: translateY(-1px); }
+    .download-btn svg { width: 14px; height: 14px; }
+
+    /* ─── SIDE PANEL ─── */
+    .side-panel { overflow: hidden; }
+
+    .faces-scroll {
+      flex: 1; overflow-y: auto; padding: 8px;
+      display: flex; flex-direction: column; gap: 5px; min-height: 0;
+    }
+    .faces-scroll::-webkit-scrollbar { width: 4px; }
+    .faces-scroll::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 2px; }
+
+    .faces-empty {
+      flex: 1; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      gap: 10px; color: var(--text-dim); text-align: center; padding: 32px 20px;
+    }
+    .faces-empty svg { width: 38px; height: 38px; opacity: 0.3; }
+    .faces-empty p { font-size: 12px; color: var(--text-muted); line-height: 1.6; }
+
+    .face-card {
+      display: flex; align-items: center; gap: 9px;
+      padding: 9px 10px;
+      border: 1px solid var(--border);
+      border-left: 3px solid var(--border);
+      border-radius: var(--r-sm);
+      background: var(--surface2);
+      animation: slide-in 0.22s ease;
+      transition: border-color 0.25s;
+    }
+    @keyframes slide-in { from { opacity:0; transform:translateX(6px); } to { opacity:1; transform:none; } }
+    .face-card.minor  { border-left-color: var(--red); }
+    .face-card.adult  { border-left-color: var(--green); }
+    .face-card.pending-face { border-left-color: var(--amber); }
+
+    .face-thumb {
+      width: 38px; height: 38px; border-radius: 4px;
+      object-fit: cover; flex-shrink: 0; background: var(--surface3);
+    }
+    .face-thumb-ph {
+      width: 38px; height: 38px; border-radius: 4px;
+      background: var(--surface3); flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+    }
+    .face-thumb-ph svg { width: 18px; height: 18px; color: var(--text-dim); }
+
+    .face-info { flex: 1; min-width: 0; }
+    .face-num { font-size: 10px; font-weight: 500; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.4px; }
+    .face-verdict { font-size: 12px; font-weight: 600; margin-top: 1px; }
+    .face-verdict.minor  { color: var(--red); }
+    .face-verdict.adult  { color: var(--green); }
+    .face-verdict.pending-face { color: var(--amber); }
+    .face-conf { font-size: 10px; color: var(--text-muted); margin-top: 1px; }
+
+    .face-icon {
+      width: 26px; height: 26px; border-radius: 50%;
+      display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+    }
+    .face-icon svg { width: 13px; height: 13px; }
+    .face-icon.minor  { background: var(--red-dim); color: var(--red); }
+    .face-icon.adult  { background: var(--green-dim); color: var(--green); }
+    .face-icon.pending-face { background: var(--amber-dim); color: var(--amber); }
+
+    /* Summary */
+    .summary-block {
+      border-top: 1px solid var(--border); padding: 8px;
+      display: none; flex-shrink: 0;
+    }
+    .summary-block.visible { display: block; }
+    .summary-grid { display: grid; grid-template-columns: repeat(3,1fr); gap: 6px; }
+    .summary-chip {
+      padding: 9px 8px; border-radius: var(--r-sm);
+      border: 1px solid var(--border); background: var(--surface2); text-align: center;
+    }
+    .summary-chip .num { display: block; font-size: 20px; font-weight: 700; line-height: 1; margin-bottom: 3px; }
+    .summary-chip .lbl { font-size: 10px; color: var(--text-muted); font-weight: 500; }
+    .summary-chip.total .num { color: var(--accent); }
+    .summary-chip.minor .num { color: var(--red); }
+    .summary-chip.adult .num { color: var(--green); }
+
+    /* Metrics */
+    .metrics-block {
+      border-top: 1px solid var(--border); padding: 10px;
+      display: none; flex-shrink: 0;
+    }
+    .metrics-block.visible { display: block; }
+    .metrics-title { font-size: 10px; font-weight: 600; color: var(--text-muted); margin-bottom: 8px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .metric-row { display: flex; align-items: center; gap: 8px; margin-bottom: 5px; }
+    .metric-label { font-size: 10px; color: var(--text-muted); width: 100px; flex-shrink: 0; }
+    .metric-bar-wrap { flex: 1; height: 3px; background: var(--surface3); border-radius: 2px; overflow: hidden; }
+    .metric-bar { height: 100%; border-radius: 2px; width: 0%; transition: width 0.9s ease; }
+    .metric-val { font-size: 10px; color: var(--text-muted); width: 44px; text-align: right; flex-shrink: 0; }
+
+    /* Activity log */
+    .log-block { border-top: 1px solid var(--border); flex-shrink: 0; }
+    .log-header {
+      padding: 7px 13px; display: flex; align-items: center; gap: 7px;
+      cursor: pointer; user-select: none;
+    }
+    .log-header-title { font-size: 11px; font-weight: 600; color: var(--text-muted); flex: 1; }
+    .log-chevron { color: var(--text-dim); transition: transform 0.2s; }
+    .log-chevron svg { width: 11px; height: 11px; }
+    .log-chevron.open { transform: rotate(180deg); }
+
+    .log-body {
+      overflow: hidden; max-height: 110px;
+      overflow-y: auto; padding: 2px 12px 8px;
+      transition: max-height 0.25s ease;
+    }
+    .log-body.collapsed { max-height: 0; padding: 0 12px; }
+    .log-body::-webkit-scrollbar { width: 3px; }
+    .log-body::-webkit-scrollbar-thumb { background: var(--surface3); border-radius: 2px; }
+
+    .log-item {
+      display: flex; align-items: flex-start; gap: 7px;
+      padding: 3px 0; animation: fade-up 0.15s ease;
+    }
+    @keyframes fade-up { from{opacity:0;transform:translateY(2px)} to{opacity:1;transform:none} }
+    .log-dot {
+      width: 6px; height: 6px; border-radius: 50; flex-shrink: 0; margin-top: 5px;
+    }
+    .log-dot.info    { background: var(--accent); }
+    .log-dot.warn    { background: var(--red); }
+    .log-dot.error   { background: var(--red); }
+    .log-dot.success { background: var(--green); }
+    .log-text { flex: 1; font-size: 11px; color: var(--text-muted); line-height: 1.5; }
+    .log-text b { font-weight: 500; color: var(--text); }
+    .log-time { font-size: 10px; color: var(--text-dim); flex-shrink: 0; }
+
     .hidden { display: none !important; }
   </style>
 </head>
 <body>
 
-<!-- ── HEADER ── -->
+<!-- HEADER -->
 <header>
-  <div class="logo">PIXELAR<span>/</span>MENORES</div>
-
-  <div class="pipeline">
-    <div class="step" id="step-0">
-      <div class="step-dot"></div>
-      <span>Carga</span>
+  <div class="logo">
+    <div class="logo-icon">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
     </div>
-    <div class="step-line" id="line-0"></div>
-    <div class="step" id="step-1">
-      <div class="step-dot"></div>
-      <span>Detección</span>
-    </div>
-    <div class="step-line" id="line-1"></div>
-    <div class="step" id="step-2">
-      <div class="step-dot"></div>
-      <span>Edad</span>
-    </div>
-    <div class="step-line" id="line-2"></div>
-    <div class="step" id="step-3">
-      <div class="step-dot"></div>
-      <span>Pixelado</span>
-    </div>
-    <div class="step-line" id="line-3"></div>
-    <div class="step" id="step-4">
-      <div class="step-dot"></div>
-      <span>Completado</span>
-    </div>
+    <span class="logo-text">Pixelar<em>Menores</em></span>
   </div>
 
-  <div class="status-badge" id="status-badge">EN ESPERA</div>
+  <div class="pipeline">
+    <div class="step" id="step-0"><div class="step-dot"></div><span>Carga</span></div>
+    <div class="step-line" id="line-0"></div>
+    <div class="step" id="step-1"><div class="step-dot"></div><span>Detección</span></div>
+    <div class="step-line" id="line-1"></div>
+    <div class="step" id="step-2"><div class="step-dot"></div><span>Análisis</span></div>
+    <div class="step-line" id="line-2"></div>
+    <div class="step" id="step-3"><div class="step-dot"></div><span>Protección</span></div>
+    <div class="step-line" id="line-3"></div>
+    <div class="step" id="step-4"><div class="step-dot"></div><span>Listo</span></div>
+  </div>
+
+  <div class="status-badge" id="status-badge">
+    <div class="badge-dot"></div>
+    <span id="status-text">En espera</span>
+  </div>
 </header>
 
-<!-- ── MAIN ── -->
+<!-- MAIN -->
 <main>
 
   <!-- LEFT: image panel -->
-  <div class="panel image-panel">
-    <div class="panel-header"><div class="dot"></div>VISOR DE IMAGEN</div>
+  <div class="panel">
+    <div class="panel-header">
+      <svg class="panel-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>
+      </svg>
+      <span class="panel-header-title">Visor de imagen</span>
+      <span class="panel-header-meta" id="image-meta"></span>
+    </div>
 
-    <!-- upload zone -->
+    <!-- Upload zone -->
     <div class="upload-zone" id="upload-zone">
-      <div class="icon">⬆</div>
-      <h2>CARGAR IMAGEN</h2>
-      <p>Arrastra y suelta o haz clic para seleccionar</p>
-      <p style="font-size:11px; margin-top:-8px;">JPG, PNG, WEBP</p>
-      <button class="upload-btn" onclick="document.getElementById('file-input').click()">Seleccionar archivo</button>
+      <div class="upload-icon">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/>
+          <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+        </svg>
+      </div>
+      <div>
+        <div class="upload-title">Sube una imagen</div>
+        <div class="upload-sub" style="margin-top:6px">Arrastra y suelta o haz clic para seleccionar<br>JPG · PNG · WEBP</div>
+      </div>
+      <button class="upload-btn" onclick="document.getElementById('file-input').click()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+        </svg>
+        Seleccionar archivo
+      </button>
       <input type="file" id="file-input" accept="image/*" />
     </div>
 
-    <!-- processing viewport -->
+    <!-- Original image + bboxes -->
     <div class="image-viewport" id="image-viewport">
-      <div>
-        <div class="image-label">Imagen original — detección de caras</div>
+      <div class="image-frame">
         <div class="image-wrap">
           <img id="preview-img" alt="Imagen original" />
           <canvas id="bbox-canvas"></canvas>
         </div>
       </div>
+      <div class="image-status-bar">
+        <div class="spinner" id="proc-spinner"></div>
+        <span id="proc-msg">Analizando imagen...</span>
+      </div>
+    </div>
 
-      <div class="result-section" id="result-section">
-        <div class="image-label" style="color: var(--green);">Imagen procesada — resultado final</div>
-        <img id="result-img" alt="Imagen procesada" />
+    <!-- Processed result (replaces original when done) -->
+    <div class="result-frame" id="result-frame">
+      <div class="result-image-wrap">
+        <img id="result-img" alt="Imagen protegida" />
+      </div>
+      <div class="result-actions">
+        <span class="result-label">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+          </svg>
+          Imagen protegida lista
+        </span>
+        <button class="download-btn" id="download-btn" onclick="downloadResult()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          Guardar imagen
+        </button>
+        <button class="upload-btn secondary" onclick="resetApp()">Nueva imagen</button>
       </div>
     </div>
   </div>
 
   <!-- RIGHT: side panel -->
   <div class="panel side-panel">
-    <div class="panel-header"><div class="dot"></div>ANÁLISIS DE CARAS</div>
+    <div class="panel-header">
+      <svg class="panel-header-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      <span class="panel-header-title">Personas detectadas</span>
+    </div>
 
-    <div class="faces-list" id="faces-list">
+    <div class="faces-scroll" id="faces-scroll">
       <div class="faces-empty" id="faces-empty">
-        <div class="big-icon">👤</div>
-        <div>Carga una imagen para comenzar el análisis</div>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        </svg>
+        <p>Carga una imagen para iniciar el análisis automático de personas</p>
       </div>
     </div>
 
-    <div class="metrics-section" id="metrics-section" style="display:none">
-      <div class="metrics-title">Rendimiento del pipeline</div>
-      <div class="summary-row">
-        <div class="summary-chip total">
-          <span class="num" id="m-total">—</span>
-          <span class="lbl">Caras</span>
-        </div>
-        <div class="summary-chip minor">
-          <span class="num" id="m-menores">—</span>
-          <span class="lbl">Menores</span>
-        </div>
-        <div class="summary-chip adult">
-          <span class="num" id="m-adultos">—</span>
-          <span class="lbl">Adultos</span>
-        </div>
+    <!-- Summary counts -->
+    <div class="summary-block" id="summary-block">
+      <div class="summary-grid">
+        <div class="summary-chip total"><span class="num" id="m-total">—</span><span class="lbl">Total</span></div>
+        <div class="summary-chip minor"><span class="num" id="m-menores">—</span><span class="lbl">Menores</span></div>
+        <div class="summary-chip adult"><span class="num" id="m-adultos">—</span><span class="lbl">Adultos</span></div>
       </div>
+    </div>
+
+    <!-- Pipeline timings -->
+    <div class="metrics-block" id="metrics-block">
+      <div class="metrics-title">Tiempos del pipeline</div>
       <div class="metric-row">
         <span class="metric-label">Total</span>
-        <div class="metric-bar-wrap"><div class="metric-bar" id="bar-total" style="background:var(--cyan)"></div></div>
+        <div class="metric-bar-wrap"><div class="metric-bar" id="bar-total" style="background:var(--accent)"></div></div>
         <span class="metric-val" id="val-total">—</span>
       </div>
       <div class="metric-row">
@@ -634,8 +524,8 @@
         <span class="metric-val" id="val-faces">—</span>
       </div>
       <div class="metric-row">
-        <span class="metric-label">Estimación edad</span>
-        <div class="metric-bar-wrap"><div class="metric-bar" id="bar-age" style="background:var(--cyan)"></div></div>
+        <span class="metric-label">Clasificación edad</span>
+        <div class="metric-bar-wrap"><div class="metric-bar" id="bar-age" style="background:var(--accent)"></div></div>
         <span class="metric-val" id="val-age">—</span>
       </div>
       <div class="metric-row">
@@ -644,47 +534,51 @@
         <span class="metric-val" id="val-pix">—</span>
       </div>
     </div>
+
+    <!-- Activity log -->
+    <div class="log-block">
+      <div class="log-header" onclick="toggleLog()">
+        <svg style="width:12px;height:12px;color:var(--accent);flex-shrink:0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
+        </svg>
+        <span class="log-header-title">Actividad</span>
+        <div class="log-chevron open" id="log-chevron">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="18 15 12 9 6 15"/>
+          </svg>
+        </div>
+      </div>
+      <div class="log-body" id="log-body"></div>
+    </div>
   </div>
 </main>
 
-<!-- ── LOG TERMINAL ── -->
-<div class="log-terminal">
-  <div class="log-header">
-    <span class="log-terminal-icon">▸</span>
-    <span class="log-header-title">EVENT LOG</span>
-    <button class="log-clear" onclick="clearLogs()">limpiar</button>
-  </div>
-  <div class="log-entries" id="log-entries"></div>
-</div>
-
 <script>
-  const API = '';  // same origin; change to 'http://localhost:8000' if opening as file
+  const API = '';
 
-  // ── state ──
-  let guid       = null;
-  let pollTimer  = null;
-  let lastStatus = null;
-  let faces      = {};      // num_cara → face data
-  let totalFaces = null;
-  let fetchedFaces = new Set();
-
-  // ── pipeline step index ──
+  let guid = null, pollTimer = null, lastStatus = null;
+  let faces = {}, totalFaces = null, resultUrl = null;
   const STATE_ORDER = ['PENDING','FACE_DETECTION','AGE_DETECTION','PIXELATION','COMPLETED'];
 
-  // ── log ──
-  function log(level, msg) {
-    const el   = document.getElementById('log-entries');
-    const ts   = new Date().toLocaleTimeString('es-ES', {hour12:false});
-    const line = document.createElement('div');
-    line.className = `log-line ${level}`;
-    const tags = {info:'INFO',warn:'WARN',error:'ERR ',success:'OK  '};
-    line.innerHTML = `<span class="log-ts">${ts}</span><span class="log-tag">[${tags[level]||level}]</span><span class="log-msg">${msg}</span>`;
-    el.appendChild(line);
-    el.scrollTop = el.scrollHeight;
+  // ── Log ──
+  function log(level, title, detail) {
+    const body = document.getElementById('log-body');
+    const ts = new Date().toLocaleTimeString('es-ES', {hour12:false});
+    const item = document.createElement('div');
+    item.className = 'log-item';
+    item.innerHTML = `<div class="log-dot ${level}"></div><div class="log-text"><b>${title}</b>${detail ? ' — ' + detail : ''}</div><div class="log-time">${ts}</div>`;
+    body.appendChild(item);
+    body.scrollTop = body.scrollHeight;
   }
-  function clearLogs() { document.getElementById('log-entries').innerHTML = ''; }
 
-  // ── pipeline UI ──
+  function toggleLog() {
+    const body = document.getElementById('log-body');
+    const chev = document.getElementById('log-chevron');
+    body.classList.toggle('collapsed');
+    chev.classList.toggle('open');
+  }
+
+  // ── Pipeline ──
   function updatePipeline(estado) {
     const idx = STATE_ORDER.indexOf(estado);
     for (let i = 0; i <= 4; i++) {
@@ -692,114 +586,110 @@
       const line = document.getElementById(`line-${i}`);
       step.classList.remove('done','active','error');
       if (line) line.style.background = '';
-      if (i < idx)       { step.classList.add('done'); if (line) line.style.background='var(--cyan)'; }
+      if (i < idx)        { step.classList.add('done'); if (line) line.style.background='var(--accent)'; }
       else if (i === idx) step.classList.add('active');
     }
-    // badge
     const badge = document.getElementById('status-badge');
     badge.className = 'status-badge';
-    const labels = {
-      PENDING:'Pendiente', FACE_DETECTION:'Detectando caras',
-      AGE_DETECTION:'Estimando edad', PIXELATION:'Pixelando',
-      COMPLETED:'Completado'
+    const map = {
+      PENDING:        ['pending',   'Pendiente'],
+      FACE_DETECTION: ['active',    'Detectando caras'],
+      AGE_DETECTION:  ['active',    'Analizando edades'],
+      PIXELATION:     ['active',    'Protegiendo'],
+      COMPLETED:      ['completed', 'Completado'],
     };
-    badge.textContent = labels[estado] || estado;
-    if (estado==='PENDING')        badge.classList.add('pending');
-    else if (estado==='COMPLETED') badge.classList.add('completed');
-    else                           badge.classList.add('active');
+    const [cls, txt] = map[estado] || ['', estado];
+    badge.classList.add(cls);
+    document.getElementById('status-text').textContent = txt;
   }
 
-  // ── show image viewport ──
-  function showViewport(src) {
+  // ── Image ──
+  function showViewport(src, filename) {
     document.getElementById('upload-zone').style.display = 'none';
-    const vp = document.getElementById('image-viewport');
-    vp.classList.add('visible');
+    document.getElementById('image-meta').textContent = filename || '';
+    document.getElementById('image-viewport').classList.add('visible');
     const img = document.getElementById('preview-img');
     img.src = src;
-    img.onload = () => { resizeCanvas(); drawBoxes(); };
+    img.onload = () => { syncCanvas(); drawBoxes(); };
   }
 
-  // ── canvas ──
-  function resizeCanvas() {
-    const img    = document.getElementById('preview-img');
+  function showResult(url) {
+    resultUrl = url;
+    document.getElementById('image-viewport').style.display = 'none';
+    document.getElementById('result-img').src = url;
+    document.getElementById('result-frame').classList.add('visible');
+    document.getElementById('image-meta').textContent = 'Imagen protegida';
+  }
+
+  // ── Canvas ──
+  function syncCanvas() {
+    const img = document.getElementById('preview-img');
     const canvas = document.getElementById('bbox-canvas');
     canvas.width  = img.offsetWidth;
     canvas.height = img.offsetHeight;
   }
 
   function drawBoxes() {
-    const img    = document.getElementById('preview-img');
+    const img = document.getElementById('preview-img');
     const canvas = document.getElementById('bbox-canvas');
     if (!img.naturalWidth) return;
-    resizeCanvas();
+    syncCanvas();
     const ctx = canvas.getContext('2d');
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-
     const sx = canvas.width  / img.naturalWidth;
     const sy = canvas.height / img.naturalHeight;
 
     for (const f of Object.values(faces)) {
       if (!f.bbox) continue;
-      const x = f.bbox.x * sx, y = f.bbox.y * sy;
-      const w = f.bbox.w * sx, h = f.bbox.h * sy;
+      const x = f.bbox.x*sx, y = f.bbox.y*sy, w = f.bbox.w*sx, h = f.bbox.h*sy;
+      const color = f.es_menor===true ? '#F43F5E' : f.es_menor===false ? '#10B981' : '#F59E0B';
 
-      let color;
-      if (f.es_menor === true)       color = '#f43f5e';
-      else if (f.es_menor === false) color = '#10b981';
-      else                           color = '#f59e0b';
-
-      // border
-      ctx.strokeStyle = color;
-      ctx.lineWidth   = 2;
-      ctx.shadowColor = color;
-      ctx.shadowBlur  = 8;
+      ctx.strokeStyle = color; ctx.lineWidth = 2;
+      ctx.shadowColor = color; ctx.shadowBlur = 6;
       ctx.strokeRect(x, y, w, h);
-      ctx.shadowBlur  = 0;
+      ctx.shadowBlur = 0;
 
-      // corner ticks
-      const t = 10;
-      ctx.lineWidth = 3;
+      const t = 8; ctx.lineWidth = 2.5;
       [[x,y],[x+w,y],[x,y+h],[x+w,y+h]].forEach(([cx,cy],i)=>{
-        const dx = i%2===0 ? 1 : -1, dy = i<2 ? 1 : -1;
-        ctx.beginPath();
-        ctx.moveTo(cx+dx*t,cy); ctx.lineTo(cx,cy); ctx.lineTo(cx,cy+dy*t);
-        ctx.stroke();
+        const dx=i%2===0?1:-1, dy=i<2?1:-1;
+        ctx.beginPath(); ctx.moveTo(cx+dx*t,cy); ctx.lineTo(cx,cy); ctx.lineTo(cx,cy+dy*t); ctx.stroke();
       });
 
-      // label bg + text
-      const label = f.es_menor===true  ? `⚠ MENOR #${f.num_cara}` :
-                    f.es_menor===false ? `✓ ADULTO #${f.num_cara}` :
-                    `⟳ CARA #${f.num_cara}`;
-      ctx.font = 'bold 11px "JetBrains Mono", monospace';
+      const label = f.es_menor===true ? `Menor #${f.num_cara}` : f.es_menor===false ? `Adulto #${f.num_cara}` : `Persona #${f.num_cara}`;
+      ctx.font = '600 11px Inter, sans-serif';
       const tw = ctx.measureText(label).width;
-      ctx.fillStyle = color + 'dd';
-      ctx.fillRect(x, y - 20, tw + 10, 20);
-      ctx.fillStyle = '#000';
-      ctx.fillText(label, x + 5, y - 5);
+      const ly = y > 20 ? y-20 : y+h+2;
+      ctx.fillStyle = color+'CC'; ctx.fillRect(x, ly, tw+10, 18);
+      ctx.shadowBlur=0; ctx.fillStyle='#fff'; ctx.fillText(label, x+5, ly+13);
     }
   }
 
-  window.addEventListener('resize', () => { resizeCanvas(); drawBoxes(); });
+  window.addEventListener('resize', ()=>{ syncCanvas(); drawBoxes(); });
 
-  // ── face cards ──
+  // ── Face cards ──
   function updateFaceCard(f) {
     const existing = document.getElementById(`face-${f.num_cara}`);
-    const cls = f.es_menor === true ? 'minor' : f.es_menor === false ? 'adult' : 'pending-face';
-    const verdict = f.es_menor === true ? 'MENOR' : f.es_menor === false ? 'ADULTO' : 'PROCESANDO...';
-    const badge   = f.es_menor === true ? '⚠' : f.es_menor === false ? '✓' : '⟳';
-    const conf    = f.escore != null ? `confianza: ${(f.escore*100).toFixed(0)}%` : '';
-    const thumb   = f.url_imagen
-      ? `<img class="face-thumb" src="${f.url_imagen}" alt="cara ${f.num_cara}" onerror="this.style.display='none'" />`
-      : `<div class="face-thumb-placeholder">👤</div>`;
+    const cls = f.es_menor===true ? 'minor' : f.es_menor===false ? 'adult' : 'pending-face';
+    const verdict = f.es_menor===true ? 'Menor de edad' : f.es_menor===false ? 'Adulto' : 'Analizando...';
+    const conf = f.escore!=null ? `Confianza: ${(f.escore*100).toFixed(0)}%` : '';
 
-    const html = `
-      ${thumb}
+    const thumbHtml = f.url_imagen
+      ? `<img class="face-thumb" src="${f.url_imagen}" alt="cara ${f.num_cara}" onerror="this.style.display='none'" />`
+      : `<div class="face-thumb-ph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>`;
+
+    const iconSvg = f.es_menor===true
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`
+      : f.es_menor===false
+      ? `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>`
+      : `<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>`;
+
+    const html = `${thumbHtml}
       <div class="face-info">
-        <div class="face-num">CARA #${f.num_cara}</div>
+        <div class="face-num">Persona #${f.num_cara}</div>
         <div class="face-verdict ${cls}">${verdict}</div>
         ${conf ? `<div class="face-conf">${conf}</div>` : ''}
       </div>
-      <div class="face-badge ${cls}">${badge}</div>`;
+      <div class="face-icon ${cls}">${iconSvg}</div>`;
 
     if (existing) {
       existing.className = `face-card ${cls}`;
@@ -807,14 +697,13 @@
     } else {
       document.getElementById('faces-empty').style.display = 'none';
       const card = document.createElement('div');
-      card.id        = `face-${f.num_cara}`;
+      card.id = `face-${f.num_cara}`;
       card.className = `face-card ${cls}`;
       card.innerHTML = html;
-      document.getElementById('faces-list').appendChild(card);
+      document.getElementById('faces-scroll').appendChild(card);
     }
   }
 
-  // ── fetch a single face ──
   async function fetchFace(n) {
     try {
       const r = await fetch(`${API}/images/${guid}/cara/${n}`);
@@ -822,153 +711,187 @@
       const data = await r.json();
       const prev = faces[n] || {};
       faces[n] = { ...data, num_cara: n };
-      if (data.es_menor !== prev.es_menor) {
-        const verdict = data.es_menor ? 'MENOR detectado' : 'Clasificado como ADULTO';
-        log(data.es_menor?'warn':'info', `Cara #${n}: ${verdict} (confianza: ${((data.escore||0)*100).toFixed(0)}%)`);
+      if (data.es_menor !== prev.es_menor && data.es_menor !== null && data.es_menor !== undefined) {
+        log(data.es_menor ? 'warn' : 'info',
+            `Persona #${n}: ${data.es_menor ? 'Menor detectado' : 'Adulto'}`,
+            `Confianza ${((data.escore||0)*100).toFixed(0)}%`);
       }
       updateFaceCard(faces[n]);
       drawBoxes();
-    } catch(_) {}
+    } catch(_){}
   }
 
-  // ── metrics ──
+  // ── Metrics ──
   function updateMetrics(sol) {
     const m = sol.metricas;
-    if (!m || !m.duracion_total_ms) return;
-
+    if (!m) return;
     const total = m.duracion_total_ms || 1;
     const pct = v => v ? Math.max(3, Math.round((v/total)*100)) : 0;
+    const fmt = v => v!=null ? `${v}ms` : '—';
 
-    document.getElementById('m-total').textContent    = m.num_imagenes_total    ?? '—';
-    document.getElementById('m-menores').textContent  = m.num_imagenes_pixeladas ?? '—';
-    document.getElementById('m-adultos').textContent  = (m.num_imagenes_total||0) - (m.num_imagenes_pixeladas||0);
-
-    const fmt = v => v != null ? `${v}ms` : '—';
+    document.getElementById('m-total').textContent   = m.num_imagenes_total ?? '—';
+    document.getElementById('m-menores').textContent = m.num_imagenes_pixeladas ?? '—';
+    document.getElementById('m-adultos').textContent = (m.num_imagenes_total||0)-(m.num_imagenes_pixeladas||0);
     document.getElementById('val-total').textContent  = fmt(m.duracion_total_ms);
     document.getElementById('val-faces').textContent  = fmt(m.duracion_deteccion_caras_ms);
     document.getElementById('val-age').textContent    = fmt(m.duracion_edad_ms);
     document.getElementById('val-pix').textContent    = fmt(m.duracion_pixelado_ms);
 
-    setTimeout(() => {
+    setTimeout(()=>{
       document.getElementById('bar-total').style.width = '100%';
-      document.getElementById('bar-faces').style.width = pct(m.duracion_deteccion_caras_ms) + '%';
-      document.getElementById('bar-age').style.width   = pct(m.duracion_edad_ms) + '%';
-      document.getElementById('bar-pix').style.width   = pct(m.duracion_pixelado_ms) + '%';
+      document.getElementById('bar-faces').style.width = pct(m.duracion_deteccion_caras_ms)+'%';
+      document.getElementById('bar-age').style.width   = pct(m.duracion_edad_ms)+'%';
+      document.getElementById('bar-pix').style.width   = pct(m.duracion_pixelado_ms)+'%';
     }, 100);
 
-    document.getElementById('metrics-section').style.display = 'block';
+    document.getElementById('summary-block').classList.add('visible');
+    document.getElementById('metrics-block').classList.add('visible');
   }
 
-  // ── poll status ──
+  // ── Poll ──
   async function poll() {
     try {
       const r = await fetch(`${API}/images/${guid}`);
       if (!r.ok) return;
       const sol = await r.json();
-
       const estado = sol.estado;
+
       if (estado !== lastStatus) {
-        const msgs = {
-          FACE_DETECTION: 'Detección de caras iniciada...',
-          AGE_DETECTION:  'Estimación de edad en progreso...',
-          PIXELATION:     'Pixelando caras de menores...',
-          COMPLETED:      'Pipeline completado con éxito',
+        const logMap = {
+          FACE_DETECTION: ['info',    'Detectando caras',       'Escaneando la imagen'],
+          AGE_DETECTION:  ['info',    'Analizando edades',      'Clasificando cada persona'],
+          PIXELATION:     ['info',    'Aplicando protección',   'Pixelando menores detectados'],
+          COMPLETED:      ['success', 'Proceso completado',     'Imagen protegida disponible'],
         };
-        if (msgs[estado]) log(estado==='COMPLETED'?'success':'info', msgs[estado]);
+        if (logMap[estado]) log(...logMap[estado]);
         updatePipeline(estado);
         lastStatus = estado;
+
+        const procMap = {
+          FACE_DETECTION: 'Detectando caras...',
+          AGE_DETECTION:  'Analizando edades...',
+          PIXELATION:     'Aplicando pixelado...',
+          COMPLETED:      'Listo',
+        };
+        if (procMap[estado]) document.getElementById('proc-msg').textContent = procMap[estado];
       }
 
-      // if faces count now known, fetch them
       const total = sol.metricas?.num_imagenes_total;
       if (total && total !== totalFaces) {
         totalFaces = total;
-        log('info', `${total} cara(s) detectada(s)`);
-        // seed placeholder entries
-        for (let i = 1; i <= total; i++) {
-          if (!faces[i]) {
-            faces[i] = { num_cara: i, bbox: null, es_menor: null };
-            updateFaceCard(faces[i]);
-          }
+        log('info', `${total} persona${total>1?'s':''} detectada${total>1?'s':''}`, '');
+        for (let i=1; i<=total; i++) {
+          if (!faces[i]) { faces[i]={num_cara:i,bbox:null,es_menor:null}; updateFaceCard(faces[i]); }
         }
       }
 
-      // fetch individual faces periodically
       if (totalFaces) {
-        for (let i = 1; i <= totalFaces; i++) {
-          const f = faces[i] || {};
-          // re-fetch if not yet classified or if thumb missing
-          if (f.es_menor === null || f.es_menor === undefined || !f.url_imagen) {
-            fetchFace(i);
-          }
+        for (let i=1; i<=totalFaces; i++) {
+          const f = faces[i]||{};
+          if (f.es_menor===null || f.es_menor===undefined || !f.url_imagen) fetchFace(i);
         }
       }
 
       if (estado === 'COMPLETED') {
         clearInterval(pollTimer);
         updateMetrics(sol);
-        if (sol.url_resultado) {
-          const rs = document.getElementById('result-section');
-          rs.classList.add('visible');
-          document.getElementById('result-img').src = sol.url_resultado;
-          log('success', 'Imagen procesada disponible');
-        }
-        // final face refresh
-        for (let i = 1; i <= (totalFaces||0); i++) fetchFace(i);
+        if (sol.url_resultado) showResult(sol.url_resultado);
+        for (let i=1; i<=(totalFaces||0); i++) fetchFace(i);
       }
-
     } catch(e) {
-      log('error', 'Error de conexión con la API');
+      log('error', 'Error de conexión', 'No se pudo contactar la API');
     }
   }
 
-  // ── upload ──
+  // ── Download ──
+  async function downloadResult() {
+    if (!resultUrl) return;
+    try {
+      const r = await fetch(resultUrl);
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url; a.download = 'imagen-protegida.jpg';
+      a.click(); URL.revokeObjectURL(url);
+    } catch(e) {
+      window.open(resultUrl, '_blank');
+    }
+  }
+
+  // ── Upload ──
   async function uploadFile(file) {
     if (!file || !file.type.startsWith('image/')) {
-      log('error', 'Archivo no válido. Selecciona una imagen.'); return;
+      log('error', 'Archivo no válido', 'Selecciona una imagen JPG, PNG o WEBP'); return;
     }
-
-    // reset
-    guid = null; lastStatus = null; faces = {}; totalFaces = null; fetchedFaces.clear();
+    guid=null; lastStatus=null; faces={}; totalFaces=null; resultUrl=null;
     clearInterval(pollTimer);
-    document.getElementById('faces-list').innerHTML = '<div class="faces-empty" id="faces-empty"><div class="big-icon">👤</div><div>Analizando...</div></div>';
-    document.getElementById('metrics-section').style.display = 'none';
-    document.getElementById('result-section').classList.remove('visible');
+    document.getElementById('result-frame').classList.remove('visible');
+    document.getElementById('image-viewport').style.display='';
+    document.getElementById('image-viewport').classList.remove('visible');
+    document.getElementById('faces-scroll').innerHTML = `<div class="faces-empty" id="faces-empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>
+      <p>Analizando imagen...</p></div>`;
+    document.getElementById('summary-block').classList.remove('visible');
+    document.getElementById('metrics-block').classList.remove('visible');
 
-    // show image preview
     const url = URL.createObjectURL(file);
-    showViewport(url);
-    log('info', `Cargando imagen: ${file.name} (${(file.size/1024).toFixed(1)} KB)`);
+    showViewport(url, file.name);
+    log('info', 'Imagen cargada', `${file.name} · ${(file.size/1024).toFixed(1)} KB`);
 
     const fd = new FormData();
     fd.append('file', file);
     try {
-      const r = await fetch(`${API}/images`, { method: 'POST', body: fd });
+      const r = await fetch(`${API}/images`, {method:'POST', body:fd});
       if (!r.ok) throw new Error(`HTTP ${r.status}`);
       const data = await r.json();
       guid = data.guid_solicitud;
-      log('info', `Solicitud creada · GUID: ${guid.slice(0,8)}…`);
+      log('info', 'Solicitud creada', `ID ${guid.slice(0,8)}…`);
       updatePipeline('PENDING');
       pollTimer = setInterval(poll, 1800);
       poll();
     } catch(e) {
-      log('error', `Error al subir la imagen: ${e.message}`);
+      log('error', 'Error al subir la imagen', e.message);
     }
   }
 
-  // ── drag & drop ──
+  // ── Reset ──
+  function resetApp() {
+    clearInterval(pollTimer);
+    guid=null; lastStatus=null; faces={}; totalFaces=null; resultUrl=null;
+    document.getElementById('result-frame').classList.remove('visible');
+    document.getElementById('image-viewport').classList.remove('visible');
+    document.getElementById('image-viewport').style.display='';
+    document.getElementById('upload-zone').style.display='';
+    document.getElementById('image-meta').textContent='';
+    document.getElementById('faces-scroll').innerHTML=`<div class="faces-empty" id="faces-empty">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+      <p>Carga una imagen para iniciar el análisis automático de personas</p></div>`;
+    document.getElementById('summary-block').classList.remove('visible');
+    document.getElementById('metrics-block').classList.remove('visible');
+    const badge = document.getElementById('status-badge');
+    badge.className='status-badge';
+    document.getElementById('status-text').textContent='En espera';
+    for (let i=0; i<=4; i++) {
+      const s=document.getElementById(`step-${i}`), l=document.getElementById(`line-${i}`);
+      s.classList.remove('done','active','error');
+      if (l) l.style.background='';
+    }
+    document.getElementById('file-input').value='';
+    log('info', 'Nueva sesión iniciada', 'Listo para analizar otra imagen');
+  }
+
+  // ── Drag & drop ──
   const zone = document.getElementById('upload-zone');
   zone.addEventListener('dragover',  e => { e.preventDefault(); zone.classList.add('drag-over'); });
   zone.addEventListener('dragleave', () => zone.classList.remove('drag-over'));
-  zone.addEventListener('drop', e => {
-    e.preventDefault(); zone.classList.remove('drag-over');
-    uploadFile(e.dataTransfer.files[0]);
-  });
+  zone.addEventListener('drop', e => { e.preventDefault(); zone.classList.remove('drag-over'); uploadFile(e.dataTransfer.files[0]); });
   zone.addEventListener('click', () => document.getElementById('file-input').click());
-
   document.getElementById('file-input').addEventListener('change', e => uploadFile(e.target.files[0]));
 
-  log('info', 'Sistema listo. Esperando imagen...');
+  log('info', 'Sistema listo', 'Esperando imagen para procesar');
 </script>
 </body>
 </html>
