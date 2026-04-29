@@ -76,9 +76,21 @@ def build_consumer():
 
 def preprocess(face_img_bgr: np.ndarray) -> np.ndarray:
     img = cv2.cvtColor(face_img_bgr, cv2.COLOR_BGR2RGB)
+    # Padding a cuadrado antes de redimensionar: evita distorsionar la cara.
+    # Los recortes de YOLO son rectangulares; aplastarlos a 200x200 sin padding
+    # produce caras irreconocibles para un modelo entrenado con retratos cuadrados.
+    h, w = img.shape[:2]
+    if h != w:
+        size  = max(h, w)
+        pad_t = (size - h) // 2
+        pad_b = size - h - pad_t
+        pad_l = (size - w) // 2
+        pad_r = size - w - pad_l
+        img   = cv2.copyMakeBorder(img, pad_t, pad_b, pad_l, pad_r,
+                                   cv2.BORDER_REPLICATE)
     img = cv2.resize(img, IMG_SIZE)
     img = img.astype(np.float32)
-    img = tf.keras.applications.mobilenet_v2.preprocess_input(img)  # [-1, 1] como espera MobileNetV2
+    img = tf.keras.applications.mobilenet_v2.preprocess_input(img)
     return np.expand_dims(img, axis=0)
 
 
@@ -93,6 +105,8 @@ def classify_age(model, face_img_bgr: np.ndarray):
     es_menor  = prob >= MINOR_PROB_THRESHOLD
     edad_estimada = 12 if es_menor else 35
     confianza     = abs(prob - 0.5) * 2
+    logger.info("  → prob_raw=%.4f | threshold=%.2f | clasificado=%s",
+                prob, MINOR_PROB_THRESHOLD, "MENOR" if es_menor else "adulto")
     return edad_estimada, es_menor, round(confianza, 4)
 
 
