@@ -285,8 +285,8 @@ services:
       MINIO_ACCESS_KEY: ${MINIO_ROOT_USER:-minioadmin}
       MINIO_SECRET_KEY: ${MINIO_ROOT_PASSWORD:-minioadmin}
       MINIO_SECURE: "false"
-      MINOR_PROB_THRESHOLD: "0.65"
-      MODEL_PATH: "/app/model/age_classifier.keras"
+      MINOR_PROB_THRESHOLD: "0.3"
+      MODEL_PATH: "/app/model/resnet18_age_detection.pt"
     networks:
       - kafka-net
       - storage-net
