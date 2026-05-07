@@ -189,6 +189,18 @@ def consultar_solicitud(guid: str) -> dict | None:
 
     result = _row_to_dict(row)
 
+    conn3 = get_db()
+    try:
+        with conn3.cursor() as cur:
+            cur.execute(
+                "SELECT AVG(Escore) FROM Imagenes WHERE Id_Solicitud = %s AND Escore IS NOT NULL",
+                (result['id_solicitud'],)
+            )
+            row = cur.fetchone()
+            result['metricas']['confianza_general'] = round(float(row[0]), 4) if row and row[0] is not None else None
+    finally:
+        conn3.close()
+
     if result['estado'] == 'COMPLETED' and result['url_resultado']:
         # Detectar bucket y path de la URL almacenada para regenerar la presigned URL
         stored = result['url_resultado']

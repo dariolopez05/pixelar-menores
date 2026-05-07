@@ -6,8 +6,8 @@ from datetime import datetime, timezone
 
 import cv2
 import numpy as np
-import torch
-import torchvision.transforms as T
+import tensorflow as tf
+from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
 from kafka import KafkaConsumer, KafkaProducer
 from minio import Minio
 
@@ -27,22 +27,14 @@ MINIO_ACCESS         = os.environ.get('MINIO_ACCESS_KEY',        'minioadmin')
 MINIO_SECRET         = os.environ.get('MINIO_SECRET_KEY',        'minioadmin')
 MINIO_SECURE         = os.environ.get('MINIO_SECURE',            'false').lower() == 'true'
 MINOR_PROB_THRESHOLD = float(os.environ.get('MINOR_PROB_THRESHOLD', '0.5'))
-MODEL_PATH           = os.environ.get('MODEL_PATH', '/app/model/resnet18_age_detection.pt')
-IMG_SIZE             = 224
-
-transform = T.Compose([
-    T.ToPILImage(),
-    T.Resize((IMG_SIZE, IMG_SIZE)),
-    T.ToTensor(),
-    T.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
-])
+MODEL_PATH           = os.environ.get('MODEL_PATH', '/app/model/age_classifier.keras')
+IMG_SIZE             = (224, 224)
 
 
 def load_model():
     for attempt in range(10):
         if os.path.exists(MODEL_PATH):
-            model = torch.jit.load(MODEL_PATH, map_location='cpu')
-            model.eval()
+            model = tf.keras.models.load_model(MODEL_PATH)
             logger.info('Modelo cargado desde %s', MODEL_PATH)
             return model
         logger.warning('Modelo no encontrado en %s (intento %d/10)', MODEL_PATH, attempt + 1)
@@ -81,9 +73,9 @@ def build_consumer():
     raise RuntimeError('No se pudo conectar al consumer Kafka')
 
 
-def preprocess(face_img_bgr: np.ndarray) -> torch.Tensor:
+def preprocess(face_img_bgr: np.ndarray) -> np.ndarray:
     img = cv2.cvtColor(face_img_bgr, cv2.COLOR_BGR2RGB)
-    # Padding cuadrado para no distorsionar la cara antes de redimensionar
+    # Padding cuadrado para no distorsionar la cara
     h, w = img.shape[:2]
     if h != w:
         size  = max(h, w)
@@ -92,13 +84,14 @@ def preprocess(face_img_bgr: np.ndarray) -> torch.Tensor:
         pad_l = (size - w) // 2
         pad_r = size - w - pad_l
         img   = cv2.copyMakeBorder(img, pad_t, pad_b, pad_l, pad_r, cv2.BORDER_REPLICATE)
-    return transform(img).unsqueeze(0)
+    img = cv2.resize(img, IMG_SIZE)
+    img = preprocess_input(img.astype(np.float32))
+    return np.expand_dims(img, axis=0)
 
 
 def classify_age(model, face_img_bgr: np.ndarray):
     tensor = preprocess(face_img_bgr)
-    with torch.no_grad():
-        prob = model(tensor).squeeze().item()
+    prob = float(model.predict(tensor, verbose=0)[0][0])
     es_menor      = prob >= MINOR_PROB_THRESHOLD
     edad_estimada = 12 if es_menor else 35
     confianza     = round(abs(prob - 0.5) * 2, 4)
@@ -150,7 +143,7 @@ def process(msg, model, producer, minio_client):
 
 
 def main():
-    logger.info('Iniciando servicio de detección de edad (ResNet18 TorchScript)...')
+    logger.info('Iniciando servicio de detección de edad (EfficientNetV2S Keras)...')
     model        = load_model()
     producer     = build_producer()
     consumer     = build_consumer()

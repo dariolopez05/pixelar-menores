@@ -25,7 +25,7 @@ MINIO_ENDPOINT   = os.environ.get('MINIO_ENDPOINT',          'minio:9000')
 MINIO_ACCESS     = os.environ.get('MINIO_ACCESS_KEY',        'minioadmin')
 MINIO_SECRET     = os.environ.get('MINIO_SECRET_KEY',        'minioadmin')
 MINIO_SECURE     = os.environ.get('MINIO_SECURE',            'false').lower() == 'true'
-PIXEL_BLOCK_SIZE = int(os.environ.get('PIXEL_BLOCK_SIZE',    '20'))
+PIXEL_BLOCK_SIZE = int(os.environ.get('PIXEL_BLOCK_SIZE',    '40'))
 
 
 def build_producer():
@@ -62,9 +62,12 @@ def build_consumer():
 def pixelar(img, x, y, w, h, block):
     h_img, w_img = img.shape[:2]
     x2, y2 = min(x + w, w_img), min(y + h, h_img)
-    roi     = img[y:y2, x:x2]
-    small   = cv2.resize(roi, (max(1, (x2-x)//block), max(1, (y2-y)//block)), interpolation=cv2.INTER_LINEAR)
-    img[y:y2, x:x2] = cv2.resize(small, (x2-x, y2-y), interpolation=cv2.INTER_NEAREST)
+    rw, rh = x2 - x, y2 - y
+    roi    = img[y:y2, x:x2]
+    small  = cv2.resize(roi, (max(1, rw // block), max(1, rh // block)), interpolation=cv2.INTER_LINEAR)
+    img[y:y2, x:x2] = cv2.resize(small, (rw, rh), interpolation=cv2.INTER_NEAREST)
+    ksize = max(3, block | 1)  # odd kernel at least as large as block
+    img[y:y2, x:x2] = cv2.GaussianBlur(img[y:y2, x:x2], (ksize, ksize), 0)
     return img
 
 

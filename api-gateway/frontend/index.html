@@ -327,6 +327,19 @@
     .summary-chip.minor .num { color: var(--red); }
     .summary-chip.adult .num { color: var(--green); }
 
+    .conf-chip {
+      margin-top: 6px;
+      padding: 10px 12px;
+      border-radius: var(--r-sm);
+      border: 1px solid var(--border);
+      background: var(--surface2);
+      display: none; align-items: center; gap: 12px;
+    }
+    .conf-chip-label { font-size: 10px; color: var(--text-muted); font-weight: 500; white-space: nowrap; flex-shrink: 0; }
+    .conf-chip-bar-wrap { flex: 1; height: 5px; background: var(--surface3); border-radius: 3px; overflow: hidden; }
+    .conf-chip-bar { height: 100%; border-radius: 3px; width: 0%; transition: width 1s ease; }
+    .conf-chip-val { font-size: 18px; font-weight: 700; line-height: 1; white-space: nowrap; flex-shrink: 0; }
+
     /* Metrics */
     .metrics-block {
       border-top: 1px solid var(--border); padding: 10px;
@@ -507,6 +520,11 @@
         <div class="summary-chip total"><span class="num" id="m-total">—</span><span class="lbl">Total</span></div>
         <div class="summary-chip minor"><span class="num" id="m-menores">—</span><span class="lbl">Menores</span></div>
         <div class="summary-chip adult"><span class="num" id="m-adultos">—</span><span class="lbl">Adultos</span></div>
+      </div>
+      <div class="conf-chip" id="conf-chip">
+        <span class="conf-chip-label">Confianza del modelo</span>
+        <div class="conf-chip-bar-wrap"><div class="conf-chip-bar" id="conf-bar"></div></div>
+        <span class="conf-chip-val" id="conf-val">—</span>
       </div>
     </div>
 
@@ -744,6 +762,18 @@
       document.getElementById('bar-pix').style.width   = pct(m.duracion_pixelado_ms)+'%';
     }, 100);
 
+    if (m.confianza_general != null) {
+      const pct = Math.round(m.confianza_general * 100);
+      const color = pct >= 70 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--red)';
+      const chip = document.getElementById('conf-chip');
+      chip.style.display = 'flex';
+      chip.style.borderColor = pct >= 70 ? 'rgba(16,185,129,0.35)' : pct >= 50 ? 'rgba(245,158,11,0.35)' : 'rgba(244,63,94,0.35)';
+      document.getElementById('conf-val').textContent = pct + '%';
+      document.getElementById('conf-val').style.color = color;
+      document.getElementById('conf-bar').style.background = color;
+      setTimeout(() => { document.getElementById('conf-bar').style.width = pct + '%'; }, 150);
+    }
+
     document.getElementById('summary-block').classList.add('visible');
     document.getElementById('metrics-block').classList.add('visible');
   }
@@ -871,6 +901,8 @@
       <p>Carga una imagen para iniciar el análisis automático de personas</p></div>`;
     document.getElementById('summary-block').classList.remove('visible');
     document.getElementById('metrics-block').classList.remove('visible');
+    document.getElementById('conf-chip').style.display = 'none';
+    document.getElementById('conf-bar').style.width = '0%';
     const badge = document.getElementById('status-badge');
     badge.className='status-badge';
     document.getElementById('status-text').textContent='En espera';
