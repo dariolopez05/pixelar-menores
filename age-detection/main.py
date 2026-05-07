@@ -7,6 +7,7 @@ from datetime import datetime, timezone
 import cv2
 import numpy as np
 import tensorflow as tf
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from tensorflow.keras.applications.efficientnet_v2 import preprocess_input
 from kafka import KafkaConsumer, KafkaProducer
 from minio import Minio
@@ -89,57 +90,64 @@ def preprocess(face_img_bgr: np.ndarray) -> np.ndarray:
     return np.expand_dims(img, axis=0)
 
 
-def classify_age(model, face_img_bgr: np.ndarray):
-    tensor = preprocess(face_img_bgr)
-    prob = float(model.predict(tensor, verbose=0)[0][0])
-    es_menor      = prob >= MINOR_PROB_THRESHOLD
-    edad_estimada = 12 if es_menor else 35
-    confianza     = round(abs(prob - 0.5) * 2, 4)
-    logger.info("  → prob_raw=%.4f | threshold=%.2f | clasificado=%s",
-                prob, MINOR_PROB_THRESHOLD, "MENOR" if es_menor else "adulto")
-    return edad_estimada, es_menor, confianza
+def _download_crop(minio_client, cara):
+    bucket = cara.get('face_crops_bucket', 'face-crops')
+    path   = cara['face_crops_path']
+    resp   = minio_client.get_object(bucket, path)
+    data   = resp.read()
+    resp.close(); resp.release_conn()
+    nparr  = np.frombuffer(data, np.uint8)
+    return cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
 
 def process(msg, model, producer, minio_client):
     guid            = msg['guid_solicitud']
     id_solicitud    = msg['id_solicitud']
-    num_cara        = msg['num_cara']
-    id_imagen       = msg['id_imagen']
-    crops_bucket    = msg.get('face_crops_bucket', 'face-crops')
-    crops_path      = msg['face_crops_path']
+    num_total_caras = msg['num_total_caras']
     raw_bucket      = msg.get('minio_bucket', 'raw-images')
     raw_path        = msg['minio_path']
-    num_total_caras = msg['num_total_caras']
-    x, y, w, h      = msg['x'], msg['y'], msg['w'], msg['h']
+    caras           = msg['caras']
 
-    response  = minio_client.get_object(crops_bucket, crops_path)
-    img_bytes = response.read()
-    response.close()
-    response.release_conn()
+    # Descarga paralela de todos los recortes
+    imgs = {}
+    with ThreadPoolExecutor(max_workers=min(len(caras), 8)) as pool:
+        futures = {pool.submit(_download_crop, minio_client, c): c for c in caras}
+        for fut in as_completed(futures):
+            cara = futures[fut]
+            imgs[cara['num_cara']] = fut.result()
 
-    nparr    = np.frombuffer(img_bytes, np.uint8)
-    face_img = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
+    # Batch tensor (N, 224, 224, 3) — orden por num_cara para que probs[i] coincida
+    caras_sorted = sorted(caras, key=lambda c: c['num_cara'])
+    batch = np.concatenate([preprocess(imgs[c['num_cara']]) for c in caras_sorted], axis=0)
 
-    edad_estimada, es_menor, confianza = classify_age(model, face_img)
+    # Una sola inferencia para todas las caras
+    probs = model.predict(batch, verbose=0)  # shape (N, 1)
 
-    logger.info('[%s] Cara %d: edad=%d → %s (confianza=%.3f)',
-                guid, num_cara, edad_estimada, 'MENOR' if es_menor else 'ADULTO', confianza)
+    now = datetime.now(timezone.utc).isoformat()
+    for i, cara in enumerate(caras_sorted):
+        prob          = float(probs[i][0])
+        es_menor      = prob >= MINOR_PROB_THRESHOLD
+        edad_estimada = 12 if es_menor else 35
+        confianza     = round(abs(prob - 0.5) * 2, 4)
+        logger.info('  → Cara %d: prob_raw=%.4f | threshold=%.2f | clasificado=%s',
+                    cara['num_cara'], prob, MINOR_PROB_THRESHOLD, 'MENOR' if es_menor else 'adulto')
+        producer.send(PRODUCE_TOPIC, key=guid, value={
+            'guid_solicitud':   guid,
+            'id_solicitud':     id_solicitud,
+            'num_cara':         cara['num_cara'],
+            'id_imagen':        cara['id_imagen'],
+            'edad_estimada':    edad_estimada,
+            'es_menor':         es_menor,
+            'confianza_modelo': confianza,
+            'num_total_caras':  num_total_caras,
+            'minio_bucket':     raw_bucket,
+            'minio_path':       raw_path,
+            'x': cara['x'], 'y': cara['y'], 'w': cara['w'], 'h': cara['h'],
+            'timestamp':        now,
+        })
 
-    producer.send(PRODUCE_TOPIC, key=guid, value={
-        'guid_solicitud':   guid,
-        'id_solicitud':     id_solicitud,
-        'num_cara':         num_cara,
-        'id_imagen':        id_imagen,
-        'edad_estimada':    edad_estimada,
-        'es_menor':         es_menor,
-        'confianza_modelo': confianza,
-        'num_total_caras':  num_total_caras,
-        'minio_bucket':     raw_bucket,
-        'minio_path':       raw_path,
-        'x': x, 'y': y, 'w': w, 'h': h,
-        'timestamp':        datetime.now(timezone.utc).isoformat(),
-    })
     producer.flush()
+    logger.info('[%s] Batch de %d cara(s) clasificado en 1 inferencia', guid, len(caras_sorted))
 
 
 def main():

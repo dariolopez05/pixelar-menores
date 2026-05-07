@@ -138,6 +138,7 @@ def main():
             nparr = np.frombuffer(img_bytes, np.uint8)
             img   = cv2.imdecode(nparr, cv2.IMREAD_COLOR)
 
+            batch_caras = []
             for cara in caras:
                 num_cara = cara['num_cara']
                 x, y, w, h = cara['x'], cara['y'], cara['w'], cara['h']
@@ -169,22 +170,25 @@ def main():
                 finally:
                     conn.close()
 
-                producer.send('cmd.age_detection', key=guid, value={
-                    'guid_solicitud':    guid,
-                    'id_solicitud':      id_solicitud,
+                batch_caras.append({
                     'num_cara':          num_cara,
                     'id_imagen':         id_imagen,
                     'face_crops_bucket': MINIO_BUCKET_FACES,
                     'face_crops_path':   crop_path,
-                    'minio_bucket':      bucket_raw,
-                    'minio_path':        minio_path,
-                    'num_total_caras':   num_caras,
                     'x': x, 'y': y, 'w': w, 'h': h,
                 })
                 logger.info(f'[{guid}] Cara {num_cara} recortada y subida → {crop_path}')
 
+            producer.send('cmd.age_detection', key=guid, value={
+                'guid_solicitud':  guid,
+                'id_solicitud':    id_solicitud,
+                'num_total_caras': num_caras,
+                'minio_bucket':    bucket_raw,
+                'minio_path':      minio_path,
+                'caras':           batch_caras,
+            })
             producer.flush()
-            logger.info(f'[{guid}] → {num_caras} mensajes cmd.age_detection publicados')
+            logger.info(f'[{guid}] → 1 mensaje cmd.age_detection (batch de {num_caras} cara(s))')
 
         except Exception as e:
             logger.error(f'[{guid}] Error: {e}', exc_info=True)
