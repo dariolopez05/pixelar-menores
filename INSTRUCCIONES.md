@@ -7,8 +7,8 @@
 - [x] Face Detection Service — YOLOv8 (`yolov8n-face.pt` incluido en imagen Docker)
 - [x] Age Detection Service — MobileNetV2 custom (`age_classifier.keras`), procesa una cara a la vez
 - [x] Pixelation Service
-- [ ] Pruebas end-to-end
-- [ ] Entregables
+- [x] Pruebas end-to-end
+- [x] Entregables
 
 ---
 
