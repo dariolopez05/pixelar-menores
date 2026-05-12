@@ -16,8 +16,10 @@ build/
 .venv/
 venv/
 env/
+.env/
 
-# Variables de entorno locales
+# Variables de entorno
+.env
 .env.local
 .env.*.local
 
@@ -32,3 +34,11 @@ age-detection/model/
 .idea/
 *.swp
 *.swo
+
+# Claude Code (herramientas de desarrollo)
+.agents/
+CLAUDE.md
+skills-lock.json
+
+# Enunciado universitario
+assets/enunciado.md
