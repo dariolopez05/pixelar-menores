@@ -242,6 +242,10 @@ contraseña: minioadmin
 
 ## Uso del sistema
 
+El API Gateway incluye un **frontend web** accesible en `http://localhost:8000` una vez levantado el sistema. Desde ahí se puede subir una imagen, seguir el progreso del pipeline en tiempo real mediante logs visuales y ver el resultado final sin necesidad de usar la terminal.
+
+Los siguientes comandos son la alternativa programática desde curl.
+
 ### Subir una imagen
 
 ```bash
